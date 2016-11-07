@@ -1,5 +1,6 @@
 create or replace package semver as
 
+
 end;
 /
 create or replace package body semver as
@@ -23,13 +24,25 @@ create or replace package body semver as
 --// Note: this is the semver.org version of the spec that it implements
 --// Not necessarily the package version of this code.
 --exports.SEMVER_SPEC_VERSION = '2.0.0';
+SEMVER_SPEC_VERSION constant varchar2(10) := '2.0.0';
 --
 --var MAX_LENGTH = 256;
+MAX_LENGTH constant pls_integer := 256;
 --var MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER || 9007199254740991;
+MAX_SAFE_INTEGER constant pls_integer := power(2, 32)-1;
 --
 --// The actual regexps go on exports.re
+subtype typ_regexp_expression is varchar2 (4000);
+subtype typ_regexp_flags      is varchar2 (30);
+type typ_regexp is record (
+    expression typ_regexp_expression,
+    flags      typ_regexp_flags
+);
+subtype typ_regexp_name is varchar2(30);
+type typ_regexp_tab is table of typ_regexp index by varchar2(30);
 --var re = exports.re = [];
 --var src = exports.src = [];
+src typ_regexp_tab;
 --var R = 0;
 --
 --// The following Regular Expressions can be used for tokenizing,
@@ -39,8 +52,10 @@ create or replace package body semver as
 --// A single `0`, or a non-zero digit followed by zero or more digits.
 --
 --var NUMERICIDENTIFIER = R++;
+NUMERICIDENTIFIER constant typ_regexp_name := 'NUMERICIDENTIFIER';
 --src[NUMERICIDENTIFIER] = '0|[1-9]\\d*';
 --var NUMERICIDENTIFIERLOOSE = R++;
+NUMERICIDENTIFIERLOOSE constant typ_regexp_name := 'NUMERICIDENTIFIERLOOSE';
 --src[NUMERICIDENTIFIERLOOSE] = '[0-9]+';
 --
 --
@@ -49,6 +64,7 @@ create or replace package body semver as
 --// more letters, digits, or hyphens.
 --
 --var NONNUMERICIDENTIFIER = R++;
+NONNUMERICIDENTIFIER constant typ_regexp_name := 'NONNUMERICIDENTIFIER';
 --src[NONNUMERICIDENTIFIER] = '\\d*[a-zA-Z-][a-zA-Z0-9-]*';
 --
 --
@@ -56,11 +72,13 @@ create or replace package body semver as
 --// Three dot-separated numeric identifiers.
 --
 --var MAINVERSION = R++;
+MAINVERSION constant typ_regexp_name := 'MAINVERSION';
 --src[MAINVERSION] = '(' + src[NUMERICIDENTIFIER] + ')\\.' +
 --                   '(' + src[NUMERICIDENTIFIER] + ')\\.' +
 --                   '(' + src[NUMERICIDENTIFIER] + ')';
 --
 --var MAINVERSIONLOOSE = R++;
+MAINVERSIONLOOSE constant typ_regexp_name := 'MAINVERSIONLOOSE';
 --src[MAINVERSIONLOOSE] = '(' + src[NUMERICIDENTIFIERLOOSE] + ')\\.' +
 --                        '(' + src[NUMERICIDENTIFIERLOOSE] + ')\\.' +
 --                        '(' + src[NUMERICIDENTIFIERLOOSE] + ')';
@@ -69,6 +87,7 @@ create or replace package body semver as
 --// A numeric identifier, or a non-numeric identifier.
 --
 --var PRERELEASEIDENTIFIER = R++;
+PRERELEASEIDENTIFIER constant typ_regexp_name := 'PRERELEASEIDENTIFIER';
 --src[PRERELEASEIDENTIFIER] = '(?:' + src[NUMERICIDENTIFIER] +
 --                            '|' + src[NONNUMERICIDENTIFIER] + ')';
 --
@@ -229,6 +248,15 @@ create or replace package body semver as
 --// Star ranges basically just allow anything at all.
 --var STAR = R++;
 --src[STAR] = '(<|>)?=?\\s*\\*';
+
+function regexpRecord(expression in typ_regexp_expression, flags in typ_regexp_flags default null) return typ_regexp is
+    l_result typ_regexp;
+begin
+    l_result.expression := expression;
+    l_result.flags      := flags;
+    return l_result;
+end;
+
 --
 --// Compile to actual regexp objects.
 --// All are flag-free, unless they were created above with a flag.
@@ -1207,6 +1235,28 @@ create or replace package body semver as
 --  var parsed = parse(version, loose);
 --  return (parsed && parsed.prerelease.length) ? parsed.prerelease : null;
 --}
-
+begin
+    --src[NUMERICIDENTIFIER] = '0|[1-9]\\d*';
+    src(NUMERICIDENTIFIER) := regexpRecord('0|[1-9]\d*');
+    --src[NUMERICIDENTIFIERLOOSE] = '[0-9]+';
+    src(NUMERICIDENTIFIERLOOSE) := regexpRecord('[0-9]+');
+    --src[NONNUMERICIDENTIFIER] = '\\d*[a-zA-Z-][a-zA-Z0-9-]*';
+    src(NONNUMERICIDENTIFIER) := regexpRecord('\d*[a-zA-Z-][a-zA-Z0-9-]*');
+    --src[MAINVERSION] = '(' + src[NUMERICIDENTIFIER] + ')\\.' +
+    --                   '(' + src[NUMERICIDENTIFIER] + ')\\.' +
+    --                   '(' + src[NUMERICIDENTIFIER] + ')';
+    src(MAINVERSION) := '(' || src(NUMERICIDENTIFIER) || ')\.' ||
+                        '(' || src(NUMERICIDENTIFIER) || ')\.' ||
+                        '(' || src(NUMERICIDENTIFIER) || ')';
+    --src[MAINVERSIONLOOSE] = '(' + src[NUMERICIDENTIFIERLOOSE] + ')\\.' +
+    --                        '(' + src[NUMERICIDENTIFIERLOOSE] + ')\\.' +
+    --                        '(' + src[NUMERICIDENTIFIERLOOSE] + ')';
+    src(MAINVERSIONLOOSE) := '(' || src(NUMERICIDENTIFIERLOOSE) || ')\.' ||
+                             '(' || src(NUMERICIDENTIFIERLOOSE) || ')\.' ||
+                             '(' || src(NUMERICIDENTIFIERLOOSE) || ')';
+    --src[PRERELEASEIDENTIFIER] = '(?:' + src[NUMERICIDENTIFIER] +
+    --                            '|' + src[NONNUMERICIDENTIFIER] + ')';
+    src(PRERELEASEIDENTIFIER) := '(?:' + src(NUMERICIDENTIFIER) +
+                                 '|' + src(NONNUMERICIDENTIFIER) + ')';
 end;
 /
