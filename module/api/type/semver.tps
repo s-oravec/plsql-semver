@@ -20,6 +20,8 @@ create or replace type semver as object
     
     member function to_string return varchar2,
     
+    member function format return varchar2,
+
     static function valid(value in varchar2) return varchar2
 
 )

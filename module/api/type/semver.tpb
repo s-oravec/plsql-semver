@@ -10,6 +10,17 @@ create or replace type body semver as
         build      semver_tags default null
     ) return self as result is
     begin
+        -- validate
+        if major > semver_impl.MAX_SAFE_INTEGER or major < 0 then
+            raise_application_error(-20000, 'Invalid major version');
+        end if;
+        if minor > semver_impl.MAX_SAFE_INTEGER or minor < 0 then
+            raise_application_error(-20000, 'Invalid minor version');
+        end if;
+        if patch > semver_impl.MAX_SAFE_INTEGER or patch < 0 then
+            raise_application_error(-20000, 'Invalid patch version');
+        end if;
+        --
         self.major      := major;
         self.minor      := minor;
         self.patch      := patch;
@@ -30,7 +41,6 @@ create or replace type body semver as
         self.major := l_parsed_semver.major;
         self.minor := l_parsed_semver.minor;
         self.patch := l_parsed_semver.patch;
-        --
         self.prerelease := l_parsed_semver.prerelease;
         self.build      := l_parsed_semver.build;
         --
@@ -43,6 +53,13 @@ create or replace type body semver as
     begin
         return semver_impl.to_string(self);
     end;
+
+    ----------------------------------------------------------------------------
+    member function format return varchar2 is
+    begin
+        return semver_impl.to_string(self);
+    end;
+
 
     ----------------------------------------------------------------------------
     static function valid(value in varchar2) return varchar2 is

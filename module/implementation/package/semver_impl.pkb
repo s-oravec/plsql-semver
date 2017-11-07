@@ -7,9 +7,7 @@ create or replace package body semver_impl as
     SEMVER_SPEC_VERSION constant varchar2(10) := '2.0.0';
     --
     MAX_LENGTH constant pls_integer := 256;
-    --var MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER || 9007199254740991;
-    MAX_SAFE_INTEGER constant pls_integer := power(2, 31) - 1;
-    --
+   
     subtype typ_regexp_expression is varchar2(4000);
     subtype typ_regexp_modifier is varchar2(30);
     type typ_regexp is record(
@@ -1065,15 +1063,12 @@ create or replace package body semver_impl as
         end;
     
     begin
-        -- TODO
-        --  if (version.length > MAX_LENGTH)
-        --    return null;
-        --
-        --  var r = loose ? re[LOOSE] : re[FULL];
-        --  if (!r.test(FULLVERSION))
-        --    return null;
-
         d.log('parsing value "' || a_value || '"');
+        -- validate
+        if length(a_value) > MAX_LENGTH then
+            raise_application_error(-20000, 'Value too long.');
+        end if;
+        --
         if regexp_like(a_value, src(FULLVERSION).expression, src(FULLVERSION).modifier) then
             d.log('value satisfies FULLVERSION regexp');
             select value
@@ -1085,15 +1080,6 @@ create or replace package body semver_impl as
                 or value like '-%' -- prerelease
                 or value like '+%' -- build
             ;
-            -- TODO;
-            --  if (this.major > MAX_SAFE_INTEGER || this.major < 0)
-            --    throw new TypeError('Invalid major version')
-            --
-            --  if (this.minor > MAX_SAFE_INTEGER || this.minor < 0)
-            --    throw new TypeError('Invalid minor version')
-            --
-            --  if (this.patch > MAX_SAFE_INTEGER || this.patch < 0)
-            --    throw new TypeError('Invalid patch version')
             --
             l_result := new semver(major => to_number(l_semverParts(1)),
                                    minor => to_number(l_semverParts(2)),
@@ -1125,8 +1111,7 @@ create or replace package body semver_impl as
         when others then
             raise_application_error(-20000, 'Invalid SemVer string "' || a_value || '"' || chr(10) || sqlerrm);
     end;
-
-    -- TODO: create format wrapper
+    
     ----------------------------------------------------------------------------  
     function to_string(a_semver in semver) return varchar2 is
     begin
@@ -1164,13 +1149,11 @@ create or replace package body semver_impl as
         end try_parse_version;
     end;
 
-    -- TODO: implement
-    --exports.clean = clean;
-    --function clean(version, loose) {
-    --  var s = parse(version.trim().replace(/^[=v]+/, ''), loose);
-    --  return s ? s.version : null;
-    --}
-    --
+    ----------------------------------------------------------------------------
+    function clean(a_value in varchar2) return varchar2 is
+    begin
+       return valid(regexp_replace(a_value, '^[=v]+', '')); 
+    end;
 
 begin
     src(DELIMITERS) := regexpRecord('(\.)|(\+)|-');
