@@ -38,14 +38,35 @@ create or replace type body semver as
         -- parse semver string
         l_parsed_semver := semver_impl.parse(value);
         -- fill attributes
-        self.major := l_parsed_semver.major;
-        self.minor := l_parsed_semver.minor;
-        self.patch := l_parsed_semver.patch;
+        self.major      := l_parsed_semver.major;
+        self.minor      := l_parsed_semver.minor;
+        self.patch      := l_parsed_semver.patch;
         self.prerelease := l_parsed_semver.prerelease;
         self.build      := l_parsed_semver.build;
         --
         return;
         --
+    end;
+
+    ----------------------------------------------------------------------------  
+    member procedure inc
+    (
+        release    in varchar2,
+        identifier in varchar2 default null
+    ) is
+    begin
+        semver_impl.inc(self, release, identifier);
+    end;
+
+    ----------------------------------------------------------------------------
+    static function inc
+    (
+        value      in varchar2,
+        release    in varchar2,
+        identifier in varchar2 default null
+    ) return varchar2 is
+    begin
+        return semver_impl.inc(value, release, identifier);
     end;
 
     ----------------------------------------------------------------------------
@@ -60,11 +81,16 @@ create or replace type body semver as
         return semver_impl.to_string(self);
     end;
 
-
     ----------------------------------------------------------------------------
     static function valid(value in varchar2) return varchar2 is
     begin
         return semver_impl.valid(value);
+    end;
+
+    ----------------------------------------------------------------------------
+    static function clean(value in varchar2) return varchar2 is
+    begin
+        return semver_impl.clean(value);
     end;
 
 end;

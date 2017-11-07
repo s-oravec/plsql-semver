@@ -20,5 +20,12 @@ create or replace package semver_util as
         a_value_false in varchar2 default null
     ) return varchar2;
 
+    function ternary_pls_integer
+    (
+        a_condition   in boolean,
+        a_value_true  in pls_integer,
+        a_value_false in pls_integer default null
+    ) return pls_integer;
+
 end;
 /

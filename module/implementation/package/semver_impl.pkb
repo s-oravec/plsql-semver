@@ -2,12 +2,8 @@ create or replace package body semver_impl as
 
     d debug := new debug('semver');
 
-    -- Note: this is the semver.org version of the spec that it implements
-    -- Not necessarily the package version of this code.
-    SEMVER_SPEC_VERSION constant varchar2(10) := '2.0.0';
-    --
     MAX_LENGTH constant pls_integer := 256;
-   
+
     subtype typ_regexp_expression is varchar2(4000);
     subtype typ_regexp_modifier is varchar2(30);
     type typ_regexp is record(
@@ -16,6 +12,9 @@ create or replace package body semver_impl as
     subtype typ_regexp_name is varchar2(30);
     type typ_regexp_tab is table of typ_regexp index by varchar2(30);
     src typ_regexp_tab;
+
+    -- Numeric
+    IS_NUMERIC constant typ_regexp_name := 'IS_NUMERIC';
 
     -- Delimiters
     DELIMITERS constant typ_regexp_name := 'DELIMITERS';
@@ -155,6 +154,7 @@ create or replace package body semver_impl as
     -- Star ranges basically just allow anything at all.
     --src[STAR] = '(<|>)?=?\\s*\\*';
 
+    ----------------------------------------------------------------------------  
     function regexpRecord
     (
         expression in typ_regexp_expression,
@@ -167,166 +167,253 @@ create or replace package body semver_impl as
         return l_result;
     end;
 
-    --
-    --SemVer.prototype.compare = function(other) {
-    --  debug('SemVer.compare', this.version, this.loose, other);
-    --  if (!(other instanceof SemVer))
-    --    other = new SemVer(other, this.loose);
-    --
-    --  return this.compareMain(other) || this.comparePre(other);
-    --};
-    --
-    --SemVer.prototype.compareMain = function(other) {
-    --  if (!(other instanceof SemVer))
-    --    other = new SemVer(other, this.loose);
-    --
-    --  return compareIdentifiers(this.major, other.major) ||
-    --         compareIdentifiers(this.minor, other.minor) ||
-    --         compareIdentifiers(this.patch, other.patch);
-    --};
-    --
-    --SemVer.prototype.comparePre = function(other) {
-    --  if (!(other instanceof SemVer))
-    --    other = new SemVer(other, this.loose);
-    --
-    --  // NOT having a prerelease is > having one
-    --  if (this.prerelease.length && !other.prerelease.length)
-    --    return -1;
-    --  else if (!this.prerelease.length && other.prerelease.length)
-    --    return 1;
-    --  else if (!this.prerelease.length && !other.prerelease.length)
-    --    return 0;
-    --
-    --  var i = 0;
-    --  do {
-    --    var a = this.prerelease[i];
-    --    var b = other.prerelease[i];
-    --    debug('prerelease compare', i, a, b);
-    --    if (a === undefined && b === undefined)
-    --      return 0;
-    --    else if (b === undefined)
-    --      return 1;
-    --    else if (a === undefined)
-    --      return -1;
-    --    else if (a === b)
-    --      continue;
-    --    else
-    --      return compareIdentifiers(a, b);
-    --  } while (++i);
-    --};
-    --
+    ----------------------------------------------------------------------------  
+    function compareIdentifiers
+    (
+        a_this  in varchar2,
+        a_other in varchar2
+    ) return compare_result_type is
+        l_this_is_number  boolean := regexp_like(a_this, src(IS_NUMERIC).expression);
+        l_other_is_number boolean := regexp_like(a_other, src(IS_NUMERIC).expression);
+        l_this            integer;
+        l_other           integer;
+    begin
+        --
+        if l_this_is_number and l_other_is_number then
+            l_this  := to_number(a_this);
+            l_other := to_number(a_other);
+        end if;
+        -- NoFormat Start
+        return 
+            semver_util.ternary_pls_integer(l_this_is_number and not l_other_is_number, -1, 
+                semver_util.ternary_pls_integer(l_other_is_number and not l_this_is_number,  1, 
+                    semver_util.ternary_pls_integer(l_this < l_other, -1,
+                        semver_util.ternary_pls_integer(l_this > l_other,  1, 0)
+                    )
+                )
+            )
+        ;
+        -- NoFormat End
+    end;
+
+    ----------------------------------------------------------------------------  
+    function rcompareIdentifiers
+    (
+        a_this  in varchar2,
+        a_other in varchar2
+    ) return compare_result_type is
+    begin
+        return compareIdentifiers(a_other, a_this);
+    end;
+
+    ----------------------------------------------------------------------------  
+    function compareMain
+    (
+        a_this  in semver,
+        a_other in semver
+    ) return compare_result_type is
+        l_cmp_major_result compare_result_type;
+        l_cmp_minor_result compare_result_type;
+    begin
+        l_cmp_major_result := compareIdentifiers(a_this.major, a_other.major);
+        if l_cmp_major_result = COMPARE_RESULT_EQ then
+            l_cmp_minor_result := compareIdentifiers(a_this.minor, a_other.minor);
+            if l_cmp_minor_result = COMPARE_RESULT_EQ then
+                return compareIdentifiers(a_this.patch, a_other.patch);
+            else
+                return l_cmp_minor_result;
+            end if;
+        else
+            return l_cmp_major_result;
+        end if;
+    end;
+
+    ----------------------------------------------------------------------------  
+    function comparePrerelease
+    (
+        a_this  in semver,
+        a_other in semver
+    ) return compare_result_type is
+        l_this_has_prerelease  boolean := a_this.prerelease is not null and a_this.prerelease.count > 0;
+        l_other_has_prerelease boolean := a_other.prerelease is not null and a_other.prerelease.count > 0;
+        l_idx                  pls_integer := 1;
+    begin
+        --  // NOT having a prerelease is > having one
+        if l_this_has_prerelease and not l_other_has_prerelease then
+            return COMPARE_RESULT_LT;
+        elsif not l_this_has_prerelease and l_other_has_prerelease then
+            return COMPARE_RESULT_GT;
+        elsif not l_this_has_prerelease and not l_other_has_prerelease then
+            return COMPARE_RESULT_EQ;
+        end if;
+        --
+        loop
+            if a_this.prerelease(l_idx) is null and a_other.prerelease(l_idx) is null then
+                return COMPARE_RESULT_EQ;
+            elsif a_other.prerelease(l_idx) is null then
+                return COMPARE_RESULT_GT;
+            elsif a_this.prerelease(l_idx) is null then
+                return COMPARE_RESULT_LT;
+            elsif a_this.prerelease(l_idx) = a_other.prerelease(l_idx) then
+                null;
+            else
+                return compareIdentifiers(a_this.prerelease(l_idx), a_other.prerelease(l_idx));
+            end if;
+            l_idx := l_idx + 1;
+        end loop;
+    end;
+
+    ----------------------------------------------------------------------------  
+    function compare
+    (
+        a_this  in semver,
+        a_other in semver
+    ) return compare_result_type is
+        l_compareMainResult compare_result_type;
+    begin
+        l_compareMainResult := compareMain(a_this, a_other);
+        if l_compareMainResult = COMPARE_RESULT_EQ then
+            return comparePrerelease(a_this, a_other);
+        else
+            return l_compareMainResult;
+        end if;
+    end;
+
+    ----------------------------------------------------------------------------  
+    function rcompare
+    (
+        a_this  in semver,
+        a_other in semver
+    ) return compare_result_type is
+    begin
+        return compare(a_other, a_this);
+    end;
+
     -- preminor will bump the version up to the next minor release, and immediately
     -- down to pre-release. premajor and prepatch work the same way.
-    --SemVer.prototype.inc = function(release, identifier) {
-    --  switch (release) {
-    --    case 'premajor':
-    --      this.prerelease.length = 0;
-    --      this.patch = 0;
-    --      this.minor = 0;
-    --      this.major++;
-    --      this.inc('pre', identifier);
-    --      break;
-    --    case 'preminor':
-    --      this.prerelease.length = 0;
-    --      this.patch = 0;
-    --      this.minor++;
-    --      this.inc('pre', identifier);
-    --      break;
-    --    case 'prepatch':
-    --      // If this is already a prerelease, it will bump to the next version
-    --      // drop any prereleases that might already exist, since they are not
-    --      // relevant at this point.
-    --      this.prerelease.length = 0;
-    --      this.inc('patch', identifier);
-    --      this.inc('pre', identifier);
-    --      break;
-    --    // If the input is a non-prerelease version, this acts the same as
-    --    // prepatch.
-    --    case 'prerelease':
-    --      if (this.prerelease.length === 0)
-    --        this.inc('patch', identifier);
-    --      this.inc('pre', identifier);
-    --      break;
-    --
-    --    case 'major':
-    --      // If this is a pre-major version, bump up to the same major version.
-    --      // Otherwise increment major.
-    --      // 1.0.0-5 bumps to 1.0.0
-    --      // 1.1.0 bumps to 2.0.0
-    --      if (this.minor !== 0 || this.patch !== 0 || this.prerelease.length === 0)
-    --        this.major++;
-    --      this.minor = 0;
-    --      this.patch = 0;
-    --      this.prerelease = [];
-    --      break;
-    --    case 'minor':
-    --      // If this is a pre-minor version, bump up to the same minor version.
-    --      // Otherwise increment minor.
-    --      // 1.2.0-5 bumps to 1.2.0
-    --      // 1.2.1 bumps to 1.3.0
-    --      if (this.patch !== 0 || this.prerelease.length === 0)
-    --        this.minor++;
-    --      this.patch = 0;
-    --      this.prerelease = [];
-    --      break;
-    --    case 'patch':
-    --      // If this is not a pre-release version, it will increment the patch.
-    --      // If it is a pre-release it will bump up to the same patch version.
-    --      // 1.2.0-5 patches to 1.2.0
-    --      // 1.2.0 patches to 1.2.1
-    --      if (this.prerelease.length === 0)
-    --        this.patch++;
-    --      this.prerelease = [];
-    --      break;
-    --    // This probably shouldn't be used publicly.
-    --    // 1.0.0 "pre" would become 1.0.0-0 which is the wrong direction.
-    --    case 'pre':
-    --      if (this.prerelease.length === 0)
-    --        this.prerelease = [0];
-    --      else {
-    --        var i = this.prerelease.length;
-    --        while (--i >= 0) {
-    --          if (typeof this.prerelease[i] === 'number') {
-    --            this.prerelease[i]++;
-    --            i = -2;
-    --          }
-    --        }
-    --        if (i === -1) // didn't increment anything
-    --          this.prerelease.push(0);
-    --      }
-    --      if (identifier) {
-    --        // 1.2.0-beta.1 bumps to 1.2.0-beta.2,
-    --        // 1.2.0-beta.fooblz or 1.2.0-beta bumps to 1.2.0-beta.0
-    --        if (this.prerelease[0] === identifier) {
-    --          if (isNaN(this.prerelease[1]))
-    --            this.prerelease = [identifier, 0];
-    --        } else
-    --          this.prerelease = [identifier, 0];
-    --      }
-    --      break;
-    --
-    --    default:
-    --      throw new Error('invalid increment argument: ' + release);
-    --  }
-    --  this.format();
-    --  this.raw = this.version;
-    --  return this;
-    --};
-    --
-    --exports.inc = inc;
-    --function inc(version, release, loose, identifier) {
-    --  if (typeof(loose) === 'string') {
-    --    identifier = loose;
-    --    loose = undefined;
-    --  }
-    --
-    --  try {
-    --    return new SemVer(version, loose).inc(release, identifier).version;
-    --  } catch (er) {
-    --    return null;
-    --  }
-    --}
-    --
+    ----------------------------------------------------------------------------
+    procedure inc
+    (
+        a_this       in out nocopy semver,
+        a_release    in varchar2,
+        a_identifier in varchar2
+    ) is
+    begin
+        case a_release
+            when 'premajor' then
+                a_this.build      := new semver_tags();
+                a_this.prerelease := new semver_tags();
+                a_this.patch      := 0;
+                a_this.minor      := 0;
+                a_this.major      := a_this.major + 1;
+                inc(a_this, 'pre', a_identifier);
+            when 'preminor' then
+                a_this.build      := new semver_tags();
+                a_this.prerelease := new semver_tags();
+                a_this.patch      := 0;
+                a_this.minor      := a_this.minor + 1;
+                inc(a_this, 'pre', a_identifier);
+            when 'prepatch' then
+                -- If this is already a prerelease, it will bump to the next version
+                -- drop any prereleases that might already exist, since they are not
+                -- relevant at this point.
+                a_this.build      := new semver_tags();
+                a_this.prerelease := new semver_tags();
+                inc(a_this, 'patch', a_identifier);
+                inc(a_this, 'pre', a_identifier);
+            when 'prerelease' then
+                -- If the input is a non-prerelease version, this acts the same as
+                -- prepatch.
+                if a_this.prerelease is null or a_this.prerelease.count = 0 then
+                    inc(a_this, 'patch', a_identifier);
+                end if;
+                inc(a_this, 'pre', a_identifier);
+            when 'major' then
+                -- If this is a pre-major version, bump up to the same major version.
+                -- Otherwise increment major.
+                -- 1.0.0-5 bumps to 1.0.0
+                -- 1.1.0 bumps to 2.0.0
+                if a_this.minor != 0 or a_this.patch != 0 or a_this.prerelease is null or a_this.prerelease.count = 0 then
+                    a_this.major := a_this.major + 1;
+                end if;
+                a_this.minor      := 0;
+                a_this.patch      := 0;
+                a_this.build      := new semver_tags();
+                a_this.prerelease := new semver_tags();
+            when 'minor' then
+                -- If this is a pre-minor version, bump up to the same minor version.
+                -- Otherwise increment minor.
+                -- 1.2.0-5 bumps to 1.2.0
+                -- 1.2.1 bumps to 1.3.0
+                if a_this.patch != 0 or a_this.prerelease is null or a_this.prerelease.count = 0 then
+                    a_this.minor := a_this.minor + 1;
+                end if;
+                a_this.patch      := 0;
+                a_this.build      := new semver_tags();
+                a_this.prerelease := new semver_tags();
+            when 'patch' then
+                -- If this is not a pre-release version, it will increment the patch.
+                -- If it is a pre-release it will bump up to the same patch version.
+                -- 1.2.0-5 patches to 1.2.0
+                -- 1.2.0 patches to 1.2.1
+                if a_this.prerelease is null or a_this.prerelease.count = 0 then
+                    a_this.patch := a_this.patch + 1;
+                end if;
+                a_this.build      := new semver_tags();
+                a_this.prerelease := new semver_tags();
+            when 'pre' then
+                -- This probably shouldn't be used publicly.
+                -- 1.0.0 "pre" would become 1.0.0-0 which is the wrong direction.            
+                if a_this.prerelease is null or a_this.prerelease.count = 0 then
+                    a_this.prerelease := new semver_tags('0');
+                else
+                    declare
+                        l_idx pls_integer := a_this.prerelease.count;
+                    begin
+                        while l_idx > 0 loop
+                            if regexp_like(a_this.prerelease(l_idx), src(IS_NUMERIC).expression) then
+                                a_this.prerelease(l_idx) := a_this.prerelease(l_idx) + 1;
+                                l_idx := -1;
+                            end if;
+                            l_idx := l_idx - 1;
+                        end loop;
+                        if l_idx = 0 then
+                            -- didn't increment anything
+                            a_this.prerelease.extend();
+                            a_this.prerelease(a_this.prerelease.count) := '0';
+                        end if;
+                    end;
+                end if;
+                if a_identifier is not null then
+                    -- 1.2.0-beta.1 bumps to 1.2.0-beta.2,
+                    -- 1.2.0-beta.fooblz or 1.2.0-beta bumps to 1.2.0-beta.0
+                    if a_this.prerelease(1) = a_identifier then
+                        if not regexp_like(a_this.prerelease(2), src(IS_NUMERIC).expression) then
+                            a_this.prerelease := new semver_tags(a_identifier, '0');
+                        end if;
+                    else
+                        a_this.prerelease := new semver_tags(a_identifier, '0');
+                    end if;
+                end if;
+            else
+                raise_application_error(-20000, 'Invalid increment argument "' || a_release || '"');
+        end case;
+    end;
+
+    ----------------------------------------------------------------------------  
+    function inc
+    (
+        a_value      in varchar2,
+        a_release    in varchar2,
+        a_identifier in varchar2
+    ) return varchar2 is
+        l_semver semver;
+    begin
+        l_semver := semver_impl.parse(a_value);
+        semver_impl.inc(l_semver, a_release, a_identifier);
+        return semver_impl.to_string(l_semver);
+    end;
+
     --exports.diff = diff;
     --function diff(version1, version2) {
     --  if (eq(version1, version2)) {
@@ -354,59 +441,6 @@ create or replace package body semver_impl as
     --  }
     --}
     --
-    --exports.compareIdentifiers = compareIdentifiers;
-    --
-    --var numeric = /^[0-9]+$/;
-    --function compareIdentifiers(a, b) {
-    --  var anum = numeric.test(a);
-    --  var bnum = numeric.test(b);
-    --
-    --  if (anum && bnum) {
-    --    a = +a;
-    --    b = +b;
-    --  }
-    --
-    --  return (anum && !bnum) ? -1 :
-    --         (bnum && !anum) ? 1 :
-    --         a < b ? -1 :
-    --         a > b ? 1 :
-    --         0;
-    --}
-    --
-    --exports.rcompareIdentifiers = rcompareIdentifiers;
-    --function rcompareIdentifiers(a, b) {
-    --  return compareIdentifiers(b, a);
-    --}
-    --
-    --exports.major = major;
-    --function major(a, loose) {
-    --  return new SemVer(a, loose).major;
-    --}
-    --
-    --exports.minor = minor;
-    --function minor(a, loose) {
-    --  return new SemVer(a, loose).minor;
-    --}
-    --
-    --exports.patch = patch;
-    --function patch(a, loose) {
-    --  return new SemVer(a, loose).patch;
-    --}
-    --
-    --exports.compare = compare;
-    --function compare(a, b, loose) {
-    --  return new SemVer(a, loose).compare(b);
-    --}
-    --
-    --exports.compareLoose = compareLoose;
-    --function compareLoose(a, b) {
-    --  return compare(a, b, true);
-    --}
-    --
-    --exports.rcompare = rcompare;
-    --function rcompare(a, b, loose) {
-    --  return compare(b, a, loose);
-    --}
     --
     --exports.sort = sort;
     --function sort(list, loose) {
@@ -422,60 +456,104 @@ create or replace package body semver_impl as
     --  });
     --}
     --
-    --exports.gt = gt;
-    --function gt(a, b, loose) {
-    --  return compare(a, b, loose) > 0;
-    --}
-    --
-    --exports.lt = lt;
-    --function lt(a, b, loose) {
-    --  return compare(a, b, loose) < 0;
-    --}
-    --
-    --exports.eq = eq;
-    --function eq(a, b, loose) {
-    --  return compare(a, b, loose) === 0;
-    --}
-    --
-    --exports.neq = neq;
-    --function neq(a, b, loose) {
-    --  return compare(a, b, loose) !== 0;
-    --}
-    --
-    --exports.gte = gte;
-    --function gte(a, b, loose) {
-    --  return compare(a, b, loose) >= 0;
-    --}
-    --
-    --exports.lte = lte;
-    --function lte(a, b, loose) {
-    --  return compare(a, b, loose) <= 0;
-    --}
-    --
-    --exports.cmp = cmp;
-    --function cmp(a, op, b, loose) {
-    --  var ret;
-    --  switch (op) {
-    --    case '===':
-    --      if (typeof a === 'object') a = a.version;
-    --      if (typeof b === 'object') b = b.version;
-    --      ret = a === b;
-    --      break;
-    --    case '!==':
-    --      if (typeof a === 'object') a = a.version;
-    --      if (typeof b === 'object') b = b.version;
-    --      ret = a !== b;
-    --      break;
-    --    case '': case '=': case '==': ret = eq(a, b, loose); break;
-    --    case '!=': ret = neq(a, b, loose); break;
-    --    case '>': ret = gt(a, b, loose); break;
-    --    case '>=': ret = gte(a, b, loose); break;
-    --    case '<': ret = lt(a, b, loose); break;
-    --    case '<=': ret = lte(a, b, loose); break;
-    --    default: throw new TypeError('Invalid operator: ' + op);
-    --  }
-    --  return ret;
-    --}
+
+    ----------------------------------------------------------------------------
+    function gt
+    (
+        a_this  in semver,
+        a_other in semver
+    ) return boolean is
+    begin
+        return compare(a_this, a_other) = COMPARE_RESULT_GT;
+    end;
+
+    ----------------------------------------------------------------------------
+    function lt
+    (
+        a_this  in semver,
+        a_other in semver
+    ) return boolean is
+    begin
+        return compare(a_this, a_other) = COMPARE_RESULT_LT;
+    end;
+
+    ----------------------------------------------------------------------------
+    function eq
+    (
+        a_this  in semver,
+        a_other in semver
+    ) return boolean is
+    begin
+        return compare(a_this, a_other) = COMPARE_RESULT_EQ;
+    end;
+
+    ----------------------------------------------------------------------------
+    function neq
+    (
+        a_this  in semver,
+        a_other in semver
+    ) return boolean is
+    begin
+        return compare(a_this, a_other) != COMPARE_RESULT_EQ;
+    end;
+
+    ----------------------------------------------------------------------------
+    function gte
+    (
+        a_this  in semver,
+        a_other in semver
+    ) return boolean is
+    begin
+        return compare(a_this, a_other) in(COMPARE_RESULT_GT, COMPARE_RESULT_EQ);
+    end;
+
+    ----------------------------------------------------------------------------
+    function lte
+    (
+        a_this  in semver,
+        a_other in semver
+    ) return boolean is
+    begin
+        return compare(a_this, a_other) in(COMPARE_RESULT_LT, COMPARE_RESULT_EQ);
+    end;
+
+    ---------------------------------------------------------------------------- 
+    function cmp
+    (
+        a_this  in semver,
+        a_op    in varchar2,
+        a_other in semver
+    ) return boolean is
+    begin
+        case a_op
+            when '===' then
+                -- if (typeof a === 'object') a = a.version;
+                -- if (typeof b === 'object') b = b.version;
+                return a_this.format = a_other.format;
+            when '!==' then
+                -- if (typeof a === 'object') a = a.version;
+                -- if (typeof b === 'object') b = b.version;
+                return a_this.format != a_other.format;
+            when '' then
+                return eq(a_this, a_other);
+            when '=' then
+                return eq(a_this, a_other);
+            when '==' then
+                return eq(a_this, a_other);
+            when '!=' then
+                return neq(a_this, a_other);
+            when '>' then
+                return gt(a_this, a_other);
+            when '>=' then
+                return gte(a_this, a_other);
+            when '<' then
+                return lt(a_this, a_other);
+            when '<=' then
+                return lte(a_this, a_other);
+            else
+                raise_application_error(-20000, 'Invalid operator: "' || a_op || '"');
+        end case;
+    end;
     --
     --exports.Comparator = Comparator;
     --function Comparator(comp, loose) {
@@ -1028,11 +1106,6 @@ create or replace package body semver_impl as
     --  return true;
     --}
     --
-    --exports.prerelease = prerelease;
-    --function prerelease(version, loose) {
-    --  var parsed = parse(version, loose);
-    --  return (parsed && parsed.prerelease.length) ? parsed.prerelease : null;
-    --}
 
     ----------------------------------------------------------------------------
     function parse(a_value in varchar2) return semver is
@@ -1087,16 +1160,16 @@ create or replace package body semver_impl as
             --
             if l_semverParts.count > 3 then
                 if l_semverParts(4) like '-%' then
-                    d.log('parsing prerelease "'|| l_semverParts(4) ||'"');
+                    d.log('parsing prerelease "' || l_semverParts(4) || '"');
                     l_result.prerelease := parse_suffix(substr(l_semverParts(4), 2), PRERELEASEIDENTIFIER);
                 else
-                    d.log('parsing build "'|| l_semverParts(4) ||'"');
+                    d.log('parsing build "' || l_semverParts(4) || '"');
                     l_result.build := parse_suffix(substr(l_semverParts(4), 2), BUILDIDENTIFIER);
                 end if;
             end if;
             --
             if l_semverParts.count > 4 then
-                d.log('parsing build "'|| l_semverParts(5) ||'"');
+                d.log('parsing build "' || l_semverParts(5) || '"');
                 l_result.build := parse_suffix(substr(l_semverParts(5), 2), BUILDIDENTIFIER);
             end if;
             --
@@ -1111,7 +1184,7 @@ create or replace package body semver_impl as
         when others then
             raise_application_error(-20000, 'Invalid SemVer string "' || a_value || '"' || chr(10) || sqlerrm);
     end;
-    
+
     ----------------------------------------------------------------------------  
     function to_string(a_semver in semver) return varchar2 is
     begin
@@ -1152,10 +1225,11 @@ create or replace package body semver_impl as
     ----------------------------------------------------------------------------
     function clean(a_value in varchar2) return varchar2 is
     begin
-       return valid(regexp_replace(a_value, '^[=v]+', '')); 
+        return valid(regexp_replace(a_value, '^[=v]+', ''));
     end;
 
 begin
+    src(IS_NUMERIC) := regexpRecord('^[0-9]+$');
     src(DELIMITERS) := regexpRecord('(\.)|(\+)|-');
     src(NUMERICIDENTIFIER) := regexpRecord('0|[1-9]\d*');
     src(NONNUMERICIDENTIFIER) := regexpRecord('\d*[a-zA-Z-][a-zA-Z0-9-]*');

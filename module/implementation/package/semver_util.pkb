@@ -69,5 +69,20 @@ create or replace package body semver_util as
         end if;
     end;
 
+    ----------------------------------------------------------------------------
+    function ternary_pls_integer
+    (
+        a_condition   in boolean,
+        a_value_true  in pls_integer,
+        a_value_false in pls_integer default null
+    ) return pls_integer is
+    begin
+        if a_condition then
+            return a_value_true;
+        else
+            return a_value_false;
+        end if;
+    end;
+
 end;
 /

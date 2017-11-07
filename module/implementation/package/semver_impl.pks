@@ -3,6 +3,11 @@ create or replace package semver_impl as
     -- MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER || 9007199254740991;
     MAX_SAFE_INTEGER constant pls_integer := power(2, 31) - 1;
 
+    subtype compare_result_type is pls_integer range - 1 .. 1;
+    COMPARE_RESULT_LT constant compare_result_type := -1;
+    COMPARE_RESULT_EQ constant compare_result_type := 0;
+    COMPARE_RESULT_GT constant compare_result_type := 1;
+
     /**
     Validates version and returns it when it is valid SemVer version
     
@@ -20,7 +25,21 @@ create or replace package semver_impl as
     
     */
     function parse(a_value in varchar2) return semver;
-    
+
+    procedure inc
+    (
+        a_this       in out nocopy semver,
+        a_release    in varchar2,
+        a_identifier in varchar2
+    );
+
+    function inc
+    (
+        a_value      in varchar2,
+        a_release    in varchar2,
+        a_identifier in varchar2
+    ) return varchar2;
+
     /**
     Returns SemVer object as string
     
@@ -29,7 +48,7 @@ create or replace package semver_impl as
     
     */
     function to_string(a_semver in semver) return varchar2;
-    
+
     /**
     Trims value and returns valid SemVer string
     
