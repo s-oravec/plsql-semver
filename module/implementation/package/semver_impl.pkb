@@ -170,118 +170,6 @@ create or replace package body semver_impl as
     end;
 
     --
-    -- Compile to actual regexp objects.
-    -- All are flag-free, unless they were created above with a flag.
-    --for (var i = 0; i < R; i++) {
-    --  debug(i, src[i]);
-    --  if (!re[i])
-    --    re[i] = new RegExp(src[i]);
-    --}
-    --
-    --exports.parse = parse;
-    --function parse(version, loose) {
-    --  if (version instanceof SemVer)
-    --    return version;
-    --
-    --  if (typeof version !== 'string')
-    --    return null;
-    --
-    --  if (version.length > MAX_LENGTH)
-    --    return null;
-    --
-    --  var r = loose ? re[LOOSE] : re[FULL];
-    --  if (!r.test(FULLVERSION))
-    --    return null;
-    --
-    --  try {
-    --    return new SemVer(version, loose);
-    --  } catch (er) {
-    --    return null;
-    --  }
-    --}
-    --
-    --exports.valid = valid;
-    --function valid(version, loose) {
-    --  var v = parse(version, loose);
-    --  return v ? v.version : null;
-    --}
-    --
-    --
-    --exports.clean = clean;
-    --function clean(version, loose) {
-    --  var s = parse(version.trim().replace(/^[=v]+/, ''), loose);
-    --  return s ? s.version : null;
-    --}
-    --
-    --exports.SemVer = SemVer;
-    --
-    --function SemVer(version, loose) {
-    --  if (version instanceof SemVer) {
-    --    if (version.loose === loose)
-    --      return version;
-    --    else
-    --      version = version.version;
-    --  } else if (typeof version !== 'string') {
-    --    throw new TypeError('Invalid Version: ' + version);
-    --  }
-    --
-    --  if (version.length > MAX_LENGTH)
-    --    throw new TypeError('version is longer than ' + MAX_LENGTH + ' characters')
-    --
-    --  if (!(this instanceof SemVer))
-    --    return new SemVer(version, loose);
-    --
-    --  debug('SemVer', version, loose);
-    --  this.loose = loose;
-    --  var m = version.trim().match(loose ? re[LOOSE] : re[FULL]);
-    --
-    --  if (!m)
-    --    throw new TypeError('Invalid Version: ' + version);
-    --
-    --  this.raw = version;
-    --
-    --  // these are actually numbers
-    --  this.major = +m[1];
-    --  this.minor = +m[2];
-    --  this.patch = +m[3];
-    --
-    --  if (this.major > MAX_SAFE_INTEGER || this.major < 0)
-    --    throw new TypeError('Invalid major version')
-    --
-    --  if (this.minor > MAX_SAFE_INTEGER || this.minor < 0)
-    --    throw new TypeError('Invalid minor version')
-    --
-    --  if (this.patch > MAX_SAFE_INTEGER || this.patch < 0)
-    --    throw new TypeError('Invalid patch version')
-    --
-    --  // numberify any prerelease numeric ids
-    --  if (!m[4])
-    --    this.prerelease = [];
-    --  else
-    --    this.prerelease = m[4].split('.').map(function(id) {
-    --      if (/^[0-9]+$/.test(id)) {
-    --        var num = +id;
-    --        if (num >= 0 && num < MAX_SAFE_INTEGER)
-    --          return num;
-    --      }
-    --      return id;
-    --    });
-    --
-    --  this.build = m[5] ? m[5].split('.') : [];
-    --  this.format();
-    --}
-    --
-    --SemVer.prototype.format = function() {
-    --  this.version = this.major + '.' + this.minor + '.' + this.patch;
-    --  if (this.prerelease.length)
-    --    this.version += '-' + this.prerelease.join('.');
-    --  return this.version;
-    --};
-    --
-    --SemVer.prototype.toString = function() {
-    --  return this.version;
-    --};
-    --
     --SemVer.prototype.compare = function(other) {
     --  debug('SemVer.compare', this.version, this.loose, other);
     --  if (!(other instanceof SemVer))
@@ -1177,6 +1065,14 @@ create or replace package body semver_impl as
         end;
     
     begin
+        -- TODO
+        --  if (version.length > MAX_LENGTH)
+        --    return null;
+        --
+        --  var r = loose ? re[LOOSE] : re[FULL];
+        --  if (!r.test(FULLVERSION))
+        --    return null;
+
         d.log('parsing value "' || a_value || '"');
         if regexp_like(a_value, src(FULLVERSION).expression, src(FULLVERSION).modifier) then
             d.log('value satisfies FULLVERSION regexp');
@@ -1189,7 +1085,16 @@ create or replace package body semver_impl as
                 or value like '-%' -- prerelease
                 or value like '+%' -- build
             ;
-            --            
+            -- TODO;
+            --  if (this.major > MAX_SAFE_INTEGER || this.major < 0)
+            --    throw new TypeError('Invalid major version')
+            --
+            --  if (this.minor > MAX_SAFE_INTEGER || this.minor < 0)
+            --    throw new TypeError('Invalid minor version')
+            --
+            --  if (this.patch > MAX_SAFE_INTEGER || this.patch < 0)
+            --    throw new TypeError('Invalid patch version')
+            --
             l_result := new semver(major => to_number(l_semverParts(1)),
                                    minor => to_number(l_semverParts(2)),
                                    patch => to_number(l_semverParts(3)));
@@ -1221,6 +1126,7 @@ create or replace package body semver_impl as
             raise_application_error(-20000, 'Invalid SemVer string "' || a_value || '"' || chr(10) || sqlerrm);
     end;
 
+    -- TODO: create format wrapper
     ----------------------------------------------------------------------------  
     function to_string(a_semver in semver) return varchar2 is
     begin
@@ -1257,6 +1163,14 @@ create or replace package body semver_impl as
                 return null;
         end try_parse_version;
     end;
+
+    -- TODO: implement
+    --exports.clean = clean;
+    --function clean(version, loose) {
+    --  var s = parse(version.trim().replace(/^[=v]+/, ''), loose);
+    --  return s ? s.version : null;
+    --}
+    --
 
 begin
     src(DELIMITERS) := regexpRecord('(\.)|(\+)|-');
