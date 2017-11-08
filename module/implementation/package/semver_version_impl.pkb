@@ -1,23 +1,14 @@
-create or replace package body semver_impl as
+create or replace package body semver_version_impl as
 
     d debug := new debug('semver');
 
-    MAX_LENGTH constant pls_integer := 256;
-
-    subtype typ_regexp_expression is varchar2(4000);
-    subtype typ_regexp_modifier is varchar2(30);
-    type typ_regexp is record(
-        expression typ_regexp_expression,
-        modifier   typ_regexp_modifier);
-    subtype typ_regexp_name is varchar2(30);
-    type typ_regexp_tab is table of typ_regexp index by varchar2(30);
-    src typ_regexp_tab;
+    src semver_common.typ_regexp_tab;
 
     -- Numeric
-    IS_NUMERIC constant typ_regexp_name := 'IS_NUMERIC';
+    IS_NUMERIC constant semver_common.typ_regexp_name := 'IS_NUMERIC';
 
     -- Delimiters
-    DELIMITERS constant typ_regexp_name := 'DELIMITERS';
+    DELIMITERS constant semver_common.typ_regexp_name := 'DELIMITERS';
 
     --
     -- The following Regular Expressions can be used for tokenizing,
@@ -26,42 +17,42 @@ create or replace package body semver_impl as
     -- ## Numeric Identifier
     -- A single `0`, or a non-zero digit followed by zero or more digits.
     --
-    NUMERICIDENTIFIER constant typ_regexp_name := 'NUMERICIDENTIFIER';
+    NUMERICIDENTIFIER constant semver_common.typ_regexp_name := 'NUMERICIDENTIFIER';
 
     --
     -- ## Non-numeric Identifier
     -- Zero or more digits, followed by a letter or hyphen, and then zero or
     -- more letters, digits, or hyphens.
     --
-    NONNUMERICIDENTIFIER constant typ_regexp_name := 'NONNUMERICIDENTIFIER';
+    NONNUMERICIDENTIFIER constant semver_common.typ_regexp_name := 'NONNUMERICIDENTIFIER';
     --
     -- ## Main Version
     -- Three dot-separated numeric identifiers.
     --
-    MAINVERSION constant typ_regexp_name := 'MAINVERSION';
+    MAINVERSION constant semver_common.typ_regexp_name := 'MAINVERSION';
     --
     -- ## Pre-release Version Identifier
     -- A numeric identifier, or a non-numeric identifier.
     --
-    PRERELEASEIDENTIFIER constant typ_regexp_name := 'PRERELEASEIDENTIFIER';
+    PRERELEASEIDENTIFIER constant semver_common.typ_regexp_name := 'PRERELEASEIDENTIFIER';
     --
     --
     -- ## Pre-release Version
     -- Hyphen, followed by one or more dot-separated pre-release version
     -- identifiers.
     --
-    PRERELEASE constant typ_regexp_name := 'PRERELEASE';
+    PRERELEASE constant semver_common.typ_regexp_name := 'PRERELEASE';
     --
     -- ## Build Metadata Identifier
     -- Any combination of digits, letters, or hyphens.
     --
-    BUILDIDENTIFIER constant typ_regexp_name := 'BUILDIDENTIFIER';
+    BUILDIDENTIFIER constant semver_common.typ_regexp_name := 'BUILDIDENTIFIER';
     --
     -- ## Build Metadata
     -- Plus sign, followed by one or more period-separated build metadata
     -- identifiers.
     --
-    BUILD constant typ_regexp_name := 'BUILD';
+    BUILD constant semver_common.typ_regexp_name := 'BUILD';
     --
     -- ## Full Version String
     -- A main version, followed optionally by a pre-release version and
@@ -72,7 +63,7 @@ create or replace package body semver_impl as
     -- capturing group, because it should not ever be used in version
     -- comparison.
     --
-    FULLVERSION constant typ_regexp_name := 'FULLVERSION';
+    FULLVERSION constant semver_common.typ_regexp_name := 'FULLVERSION';
 
     --
     --src[GTLT] = '((?:<|>)?=?)';
@@ -155,24 +146,11 @@ create or replace package body semver_impl as
     --src[STAR] = '(<|>)?=?\\s*\\*';
 
     ----------------------------------------------------------------------------  
-    function regexpRecord
-    (
-        expression in typ_regexp_expression,
-        modifier   in typ_regexp_modifier default null
-    ) return typ_regexp is
-        l_result typ_regexp;
-    begin
-        l_result.expression := expression;
-        l_result.modifier   := modifier;
-        return l_result;
-    end;
-
-    ----------------------------------------------------------------------------  
     function compareIdentifiers
     (
         a_this  in varchar2,
         a_other in varchar2
-    ) return compare_result_type is
+    ) return semver.compare_result_type is
         l_this_is_number  boolean := regexp_like(a_this, src(IS_NUMERIC).expression);
         l_other_is_number boolean := regexp_like(a_other, src(IS_NUMERIC).expression);
         l_this            integer;
@@ -201,7 +179,7 @@ create or replace package body semver_impl as
     (
         a_this  in varchar2,
         a_other in varchar2
-    ) return compare_result_type is
+    ) return semver.compare_result_type is
     begin
         return compareIdentifiers(a_other, a_this);
     end;
@@ -209,16 +187,16 @@ create or replace package body semver_impl as
     ----------------------------------------------------------------------------  
     function compareMain
     (
-        a_this  in semver,
-        a_other in semver
-    ) return compare_result_type is
-        l_cmp_major_result compare_result_type;
-        l_cmp_minor_result compare_result_type;
+        a_this  in semver_version,
+        a_other in semver_version
+    ) return semver.compare_result_type is
+        l_cmp_major_result semver.compare_result_type;
+        l_cmp_minor_result semver.compare_result_type;
     begin
         l_cmp_major_result := compareIdentifiers(a_this.major, a_other.major);
-        if l_cmp_major_result = COMPARE_RESULT_EQ then
+        if l_cmp_major_result = semver.COMPARE_RESULT_EQ then
             l_cmp_minor_result := compareIdentifiers(a_this.minor, a_other.minor);
-            if l_cmp_minor_result = COMPARE_RESULT_EQ then
+            if l_cmp_minor_result = semver.COMPARE_RESULT_EQ then
                 return compareIdentifiers(a_this.patch, a_other.patch);
             else
                 return l_cmp_minor_result;
@@ -231,29 +209,29 @@ create or replace package body semver_impl as
     ----------------------------------------------------------------------------  
     function comparePrerelease
     (
-        a_this  in semver,
-        a_other in semver
-    ) return compare_result_type is
+        a_this  in semver_version,
+        a_other in semver_version
+    ) return semver.compare_result_type is
         l_this_has_prerelease  boolean := a_this.prerelease is not null and a_this.prerelease.count > 0;
         l_other_has_prerelease boolean := a_other.prerelease is not null and a_other.prerelease.count > 0;
         l_idx                  pls_integer := 1;
     begin
         --  // NOT having a prerelease is > having one
         if l_this_has_prerelease and not l_other_has_prerelease then
-            return COMPARE_RESULT_LT;
+            return semver.COMPARE_RESULT_LT;
         elsif not l_this_has_prerelease and l_other_has_prerelease then
-            return COMPARE_RESULT_GT;
+            return semver.COMPARE_RESULT_GT;
         elsif not l_this_has_prerelease and not l_other_has_prerelease then
-            return COMPARE_RESULT_EQ;
+            return semver.COMPARE_RESULT_EQ;
         end if;
         --
         loop
             if a_this.prerelease(l_idx) is null and a_other.prerelease(l_idx) is null then
-                return COMPARE_RESULT_EQ;
+                return semver.COMPARE_RESULT_EQ;
             elsif a_other.prerelease(l_idx) is null then
-                return COMPARE_RESULT_GT;
+                return semver.COMPARE_RESULT_GT;
             elsif a_this.prerelease(l_idx) is null then
-                return COMPARE_RESULT_LT;
+                return semver.COMPARE_RESULT_LT;
             elsif a_this.prerelease(l_idx) = a_other.prerelease(l_idx) then
                 null;
             else
@@ -266,13 +244,13 @@ create or replace package body semver_impl as
     ----------------------------------------------------------------------------  
     function compare
     (
-        a_this  in semver,
-        a_other in semver
-    ) return compare_result_type is
-        l_compareMainResult compare_result_type;
+        a_this  in semver_version,
+        a_other in semver_version
+    ) return semver.compare_result_type is
+        l_compareMainResult semver.compare_result_type;
     begin
         l_compareMainResult := compareMain(a_this, a_other);
-        if l_compareMainResult = COMPARE_RESULT_EQ then
+        if l_compareMainResult = semver.COMPARE_RESULT_EQ then
             return comparePrerelease(a_this, a_other);
         else
             return l_compareMainResult;
@@ -282,9 +260,9 @@ create or replace package body semver_impl as
     ----------------------------------------------------------------------------  
     function rcompare
     (
-        a_this  in semver,
-        a_other in semver
-    ) return compare_result_type is
+        a_this  in semver_version,
+        a_other in semver_version
+    ) return semver.compare_result_type is
     begin
         return compare(a_other, a_this);
     end;
@@ -294,7 +272,7 @@ create or replace package body semver_impl as
     ----------------------------------------------------------------------------
     procedure inc
     (
-        a_this       in out nocopy semver,
+        a_this       in out nocopy semver_version,
         a_release    in varchar2,
         a_identifier in varchar2
     ) is
@@ -400,129 +378,72 @@ create or replace package body semver_impl as
         end case;
     end;
 
-    ----------------------------------------------------------------------------  
-    function inc
-    (
-        a_value      in varchar2,
-        a_release    in varchar2,
-        a_identifier in varchar2
-    ) return varchar2 is
-        l_semver semver;
-    begin
-        l_semver := semver_impl.parse(a_value);
-        semver_impl.inc(l_semver, a_release, a_identifier);
-        return semver_impl.to_string(l_semver);
-    end;
-
-    --exports.diff = diff;
-    --function diff(version1, version2) {
-    --  if (eq(version1, version2)) {
-    --    return null;
-    --  } else {
-    --    var v1 = parse(version1);
-    --    var v2 = parse(version2);
-    --    if (v1.prerelease.length || v2.prerelease.length) {
-    --      for (var key in v1) {
-    --        if (key === 'major' || key === 'minor' || key === 'patch') {
-    --          if (v1[key] !== v2[key]) {
-    --            return 'pre'+key;
-    --          }
-    --        }
-    --      }
-    --      return 'prerelease';
-    --    }
-    --    for (var key in v1) {
-    --      if (key === 'major' || key === 'minor' || key === 'patch') {
-    --        if (v1[key] !== v2[key]) {
-    --          return key;
-    --        }
-    --      }
-    --    }
-    --  }
-    --}
-    --
-    --
-    --exports.sort = sort;
-    --function sort(list, loose) {
-    --  return list.sort(function(a, b) {
-    --    return exports.compare(a, b, loose);
-    --  });
-    --}
-    --
-    --exports.rsort = rsort;
-    --function rsort(list, loose) {
-    --  return list.sort(function(a, b) {
-    --    return exports.rcompare(a, b, loose);
-    --  });
-    --}
-    --
-
     ----------------------------------------------------------------------------
     function gt
     (
-        a_this  in semver,
-        a_other in semver
+        a_this  in semver_version,
+        a_other in semver_version
     ) return boolean is
     begin
-        return compare(a_this, a_other) = COMPARE_RESULT_GT;
+        return compare(a_this, a_other) = semver.COMPARE_RESULT_GT;
     end;
 
     ----------------------------------------------------------------------------
     function lt
     (
-        a_this  in semver,
-        a_other in semver
+        a_this  in semver_version,
+        a_other in semver_version
     ) return boolean is
     begin
-        return compare(a_this, a_other) = COMPARE_RESULT_LT;
+        return compare(a_this, a_other) = semver.COMPARE_RESULT_LT;
     end;
 
     ----------------------------------------------------------------------------
     function eq
     (
-        a_this  in semver,
-        a_other in semver
+        a_this  in semver_version,
+        a_other in semver_version
     ) return boolean is
     begin
-        return compare(a_this, a_other) = COMPARE_RESULT_EQ;
+        return compare(a_this, a_other) = semver.COMPARE_RESULT_EQ;
     end;
 
     ----------------------------------------------------------------------------
     function neq
     (
-        a_this  in semver,
-        a_other in semver
+        a_this  in semver_version,
+        a_other in semver_version
     ) return boolean is
     begin
-        return compare(a_this, a_other) != COMPARE_RESULT_EQ;
+        return compare(a_this, a_other) != semver.COMPARE_RESULT_EQ;
     end;
 
     ----------------------------------------------------------------------------
     function gte
     (
-        a_this  in semver,
-        a_other in semver
+        a_this  in semver_version,
+        a_other in semver_version
     ) return boolean is
     begin
-        return compare(a_this, a_other) in(COMPARE_RESULT_GT, COMPARE_RESULT_EQ);
+        return compare(a_this, a_other) in(semver.COMPARE_RESULT_GT, semver.COMPARE_RESULT_EQ);
     end;
 
     ----------------------------------------------------------------------------
     function lte
     (
-        a_this  in semver,
-        a_other in semver
+        a_this  in semver_version,
+        a_other in semver_version
     ) return boolean is
     begin
-        return compare(a_this, a_other) in(COMPARE_RESULT_LT, COMPARE_RESULT_EQ);
+        return compare(a_this, a_other) in(semver.COMPARE_RESULT_LT, semver.COMPARE_RESULT_EQ);
     end;
 
     ---------------------------------------------------------------------------- 
     function cmp
     (
-        a_this  in semver,
+        a_this  in semver_version,
         a_op    in varchar2,
-        a_other in semver
+        a_other in semver_version
     ) return boolean is
     begin
         case a_op
@@ -1108,8 +1029,8 @@ create or replace package body semver_impl as
     --
 
     ----------------------------------------------------------------------------
-    function parse(a_value in varchar2) return semver is
-        l_result      semver;
+    function parse(a_value in varchar2) return semver_version is
+        l_result      semver_version;
         l_semverParts semver_tags;
     
         function parse_suffix
@@ -1138,7 +1059,7 @@ create or replace package body semver_impl as
     begin
         d.log('parsing value "' || a_value || '"');
         -- validate
-        if length(a_value) > MAX_LENGTH then
+        if length(a_value) > semver_common.MAX_LENGTH then
             raise_application_error(-20000, 'Value too long.');
         end if;
         --
@@ -1154,9 +1075,9 @@ create or replace package body semver_impl as
                 or value like '+%' -- build
             ;
             --
-            l_result := new semver(major => to_number(l_semverParts(1)),
-                                   minor => to_number(l_semverParts(2)),
-                                   patch => to_number(l_semverParts(3)));
+            l_result := new semver_version(major => to_number(l_semverParts(1)),
+                                           minor => to_number(l_semverParts(2)),
+                                           patch => to_number(l_semverParts(3)));
             --
             if l_semverParts.count > 3 then
                 if l_semverParts(4) like '-%' then
@@ -1186,7 +1107,7 @@ create or replace package body semver_impl as
     end;
 
     ----------------------------------------------------------------------------  
-    function to_string(a_semver in semver) return varchar2 is
+    function to_string(a_semver in semver_version) return varchar2 is
     begin
         -- NoFormat Start
         return
@@ -1207,7 +1128,7 @@ create or replace package body semver_impl as
 
     ----------------------------------------------------------------------------
     function valid(a_value in varchar2) return varchar2 is
-        l_semver semver;
+        l_semver semver_version;
     begin
         d.log('validating value> ' || a_value);
         <<try_parse_version>>
@@ -1229,26 +1150,26 @@ create or replace package body semver_impl as
     end;
 
 begin
-    src(IS_NUMERIC) := regexpRecord('^[0-9]+$');
-    src(DELIMITERS) := regexpRecord('(\.)|(\+)|-');
-    src(NUMERICIDENTIFIER) := regexpRecord('0|[1-9]\d*');
-    src(NONNUMERICIDENTIFIER) := regexpRecord('\d*[a-zA-Z-][a-zA-Z0-9-]*');
-    src(BUILDIDENTIFIER) := regexpRecord('[0-9a-zA-Z-]+');
+    src(IS_NUMERIC) := semver_common.regexpRecord('^[0-9]+$');
+    src(DELIMITERS) := semver_common.regexpRecord('(\.)|(\+)|-');
+    src(NUMERICIDENTIFIER) := semver_common.regexpRecord('0|[1-9]\d*');
+    src(NONNUMERICIDENTIFIER) := semver_common.regexpRecord('\d*[a-zA-Z-][a-zA-Z0-9-]*');
+    src(BUILDIDENTIFIER) := semver_common.regexpRecord('[0-9a-zA-Z-]+');
     -- NoFormat Start
-    src(MAINVERSION) := regexpRecord('(' || src(NUMERICIDENTIFIER).expression || ')\.' ||
+    src(MAINVERSION) := semver_common.regexpRecord('(' || src(NUMERICIDENTIFIER).expression || ')\.' ||
                                      '(' || src(NUMERICIDENTIFIER).expression || ')\.' ||
                                      '(' || src(NUMERICIDENTIFIER).expression || ')');
-    src(PRERELEASEIDENTIFIER) := regexpRecord('(' || src(NUMERICIDENTIFIER).expression ||
+    src(PRERELEASEIDENTIFIER) := semver_common.regexpRecord('(' || src(NUMERICIDENTIFIER).expression ||
                                               '|' || src(NONNUMERICIDENTIFIER).expression || ')');
-    src(PRERELEASE) := regexpRecord('(-(' || src(PRERELEASEIDENTIFIER).expression ||
+    src(PRERELEASE) := semver_common.regexpRecord('(-(' || src(PRERELEASEIDENTIFIER).expression ||
                                     '(\.' || src(PRERELEASEIDENTIFIER).expression || ')*))');
-    src(BUILD) := regexpRecord('(\+(' || src(BUILDIDENTIFIER).expression ||
+    src(BUILD) := semver_common.regexpRecord('(\+(' || src(BUILDIDENTIFIER).expression ||
                                '(\.' || src(BUILDIDENTIFIER).expression || ')*))');
     --
     -- oracle's regexp implementation just sucks
     --src(FULLVERSION) := regexpRecord('^' || 'v?' || src(MAINVERSION).expression || src(PRERELEASE).expression || '?' || src(BUILD).expression || '?' || '$');
     -- simplified
-    src(FULLVERSION) := regexpRecord('^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[a-zA-Z0-9\.-]*)?(\+[a-zA-Z0-9\.-]*)?$');
+    src(FULLVERSION) := semver_common.regexpRecord('^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[a-zA-Z0-9\.-]*)?(\+[a-zA-Z0-9\.-]*)?$');
     -- NoFormat End
 end;
 /
