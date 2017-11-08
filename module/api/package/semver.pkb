@@ -216,8 +216,66 @@ create or replace package body semver as
         sort_semver_string_table_impl(semver_string_table, true);
     end;
 
-        
-    -- gt lt gte lte eq neq
+    ----------------------------------------------------------------------------
+    function gt
+    (
+        version1 in varchar2,
+        version2 in varchar2
+    ) return boolean is
+    begin
+        return semver_version_impl.gt(parse(version1), parse(version2));
+    end;
+
+    ----------------------------------------------------------------------------
+    function lt
+    (
+        version1 in varchar2,
+        version2 in varchar2
+    ) return boolean is
+    begin
+        return semver_version_impl.lt(parse(version1), parse(version2));
+    end;
+
+    ----------------------------------------------------------------------------
+    function eq
+    (
+        version1 in varchar2,
+        version2 in varchar2
+    ) return boolean is
+    begin
+        return semver_version_impl.eq(parse(version1), parse(version2));
+    end;
+
+    ----------------------------------------------------------------------------
+    function neq
+    (
+        version1 in varchar2,
+        version2 in varchar2
+    ) return boolean is
+    begin
+        return semver_version_impl.neq(parse(version1), parse(version2));
+    end;
+
+    ----------------------------------------------------------------------------
+    function gte
+    (
+        version1 in varchar2,
+        version2 in varchar2
+    ) return boolean is
+    begin
+        return semver_version_impl.gte(parse(version1), parse(version2));
+    end;
+
+    ----------------------------------------------------------------------------
+    function lte
+    (
+        version1 in varchar2,
+        version2 in varchar2
+    ) return boolean is
+    begin
+        return semver_version_impl.lte(parse(version1), parse(version2));
+    end;
+
     -- cmp
 
     ----------------------------------------------------------------------------
@@ -230,9 +288,12 @@ create or replace package body semver as
         l_semver semver_version;
     begin
         l_semver := new semver_version(value);
-        l_semver.inc(release, identifier);
-        return l_semver.to_string();
-        return semver_version_impl.inc(value, release, identifier);
+        if l_semver is not null then
+            l_semver.inc(release, identifier);
+            return l_semver.to_string();
+        else
+            return null;
+        end if;
     end;
 
     ----------------------------------------------------------------------------
