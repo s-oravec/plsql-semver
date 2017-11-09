@@ -1,149 +1,6 @@
 create or replace package body semver_version_impl as
 
-    d debug := new debug('semver');
-
-    src semver_common.typ_regexp_tab;
-
-    -- Numeric
-    IS_NUMERIC constant semver_common.typ_regexp_name := 'IS_NUMERIC';
-
-    -- Delimiters
-    DELIMITERS constant semver_common.typ_regexp_name := 'DELIMITERS';
-
-    --
-    -- The following Regular Expressions can be used for tokenizing,
-    -- validating, and parsing SemVer version strings.
-    --
-    -- ## Numeric Identifier
-    -- A single `0`, or a non-zero digit followed by zero or more digits.
-    --
-    NUMERICIDENTIFIER constant semver_common.typ_regexp_name := 'NUMERICIDENTIFIER';
-
-    --
-    -- ## Non-numeric Identifier
-    -- Zero or more digits, followed by a letter or hyphen, and then zero or
-    -- more letters, digits, or hyphens.
-    --
-    NONNUMERICIDENTIFIER constant semver_common.typ_regexp_name := 'NONNUMERICIDENTIFIER';
-    --
-    -- ## Main Version
-    -- Three dot-separated numeric identifiers.
-    --
-    MAINVERSION constant semver_common.typ_regexp_name := 'MAINVERSION';
-    --
-    -- ## Pre-release Version Identifier
-    -- A numeric identifier, or a non-numeric identifier.
-    --
-    PRERELEASEIDENTIFIER constant semver_common.typ_regexp_name := 'PRERELEASEIDENTIFIER';
-    --
-    --
-    -- ## Pre-release Version
-    -- Hyphen, followed by one or more dot-separated pre-release version
-    -- identifiers.
-    --
-    PRERELEASE constant semver_common.typ_regexp_name := 'PRERELEASE';
-    --
-    -- ## Build Metadata Identifier
-    -- Any combination of digits, letters, or hyphens.
-    --
-    BUILDIDENTIFIER constant semver_common.typ_regexp_name := 'BUILDIDENTIFIER';
-    --
-    -- ## Build Metadata
-    -- Plus sign, followed by one or more period-separated build metadata
-    -- identifiers.
-    --
-    BUILD constant semver_common.typ_regexp_name := 'BUILD';
-    --
-    -- ## Full Version String
-    -- A main version, followed optionally by a pre-release version and
-    -- build metadata.
-    --
-    -- Note that the only major, minor, patch, and pre-release sections of
-    -- the version string are capturing groups.  The build metadata is not a
-    -- capturing group, because it should not ever be used in version
-    -- comparison.
-    --
-    FULLVERSION constant semver_common.typ_regexp_name := 'FULLVERSION';
-
-    --
-    --src[GTLT] = '((?:<|>)?=?)';
-    --
-    -- Something like "2.*" or "1.2.x".
-    -- Note that "x.x" is a valid xRange identifer, meaning "any version"
-    -- Only the first item is strictly required.
-    --src[XRANGEIDENTIFIERLOOSE] = src[NUMERICIDENTIFIERLOOSE] + '|x|X|\\*';
-    --src[XRANGEIDENTIFIER] = src[NUMERICIDENTIFIER] + '|x|X|\\*';
-    --
-    --src[XRANGEPLAIN] = '[v=\\s]*(' + src[XRANGEIDENTIFIER] + ')' +
-    --                   '(?:\\.(' + src[XRANGEIDENTIFIER] + ')' +
-    --                   '(?:\\.(' + src[XRANGEIDENTIFIER] + ')' +
-    --                   '(?:' + src[PRERELEASE] + ')?' +
-    --                   src[BUILD] + '?' +
-    --                   ')?)?';
-    --
-    --src[XRANGEPLAINLOOSE] = '[v=\\s]*(' + src[XRANGEIDENTIFIERLOOSE] + ')' +
-    --                        '(?:\\.(' + src[XRANGEIDENTIFIERLOOSE] + ')' +
-    --                        '(?:\\.(' + src[XRANGEIDENTIFIERLOOSE] + ')' +
-    --                        '(?:' + src[PRERELEASELOOSE] + ')?' +
-    --                        src[BUILD] + '?' +
-    --                        ')?)?';
-    --
-    --src[XRANGE] = '^' + src[GTLT] + '\\s*' + src[XRANGEPLAIN] + '$';
-    --src[XRANGELOOSE] = '^' + src[GTLT] + '\\s*' + src[XRANGEPLAINLOOSE] + '$';
-    --
-    -- Tilde ranges.
-    -- Meaning is "reasonably at or greater than"
-    --src[LONETILDE] = '(?:~>?)';
-    --
-    --src[TILDETRIM] = '(\\s*)' + src[LONETILDE] + '\\s+';
-    --re[TILDETRIM] = new RegExp(src[TILDETRIM], 'g');
-    --var tildeTrimReplace = '$1~';
-    --
-    --src[TILDE] = '^' + src[LONETILDE] + src[XRANGEPLAIN] + '$';
-    --src[TILDELOOSE] = '^' + src[LONETILDE] + src[XRANGEPLAINLOOSE] + '$';
-    --
-    -- Caret ranges.
-    -- Meaning is "at least and backwards compatible with"
-    --src[LONECARET] = '(?:\\^)';
-    --
-    --src[CARETTRIM] = '(\\s*)' + src[LONECARET] + '\\s+';
-    --re[CARETTRIM] = new RegExp(src[CARETTRIM], 'g');
-    --var caretTrimReplace = '$1^';
-    --
-    --src[CARET] = '^' + src[LONECARET] + src[XRANGEPLAIN] + '$';
-    --src[CARETLOOSE] = '^' + src[LONECARET] + src[XRANGEPLAINLOOSE] + '$';
-    --
-    -- A simple gt/lt/eq thing, or just "" to indicate "any version"
-    --src[COMPARATORLOOSE] = '^' + src[GTLT] + '\\s*(' + LOOSEPLAIN + ')$|^$';
-    --src[COMPARATOR] = '^' + src[GTLT] + '\\s*(' + FULLPLAIN + ')$|^$';
-    --
-    --
-    -- An expression to strip any whitespace between the gtlt and the thing
-    -- it modifies, so that `> 1.2.3` ==> `>1.2.3`
-    --src[COMPARATORTRIM] = '(\\s*)' + src[GTLT] +
-    --                      '\\s*(' + LOOSEPLAIN + '|' + src[XRANGEPLAIN] + ')';
-    --
-    -- this one has to use the /g flag
-    --re[COMPARATORTRIM] = new RegExp(src[COMPARATORTRIM], 'g');
-    --var comparatorTrimReplace = '$1$2$3';
-    --
-    --
-    -- Something like `1.2.3 - 1.2.4`
-    -- Note that these all use the loose form, because they'll be
-    -- checked against either the strict or loose comparator form
-    -- later.
-    --src[HYPHENRANGE] = '^\\s*(' + src[XRANGEPLAIN] + ')' +
-    --                   '\\s+-\\s+' +
-    --                   '(' + src[XRANGEPLAIN] + ')' +
-    --                   '\\s*$';
-    --
-    --src[HYPHENRANGELOOSE] = '^\\s*(' + src[XRANGEPLAINLOOSE] + ')' +
-    --                        '\\s+-\\s+' +
-    --                        '(' + src[XRANGEPLAINLOOSE] + ')' +
-    --                        '\\s*$';
-    --
-    -- Star ranges basically just allow anything at all.
-    --src[STAR] = '(<|>)?=?\\s*\\*';
+    d debug := new debug('semver:version');
 
     ----------------------------------------------------------------------------  
     function compareIdentifiers
@@ -151,8 +8,8 @@ create or replace package body semver_version_impl as
         a_this  in varchar2,
         a_other in varchar2
     ) return semver.compare_result_type is
-        l_this_is_number  boolean := regexp_like(a_this, src(IS_NUMERIC).expression);
-        l_other_is_number boolean := regexp_like(a_other, src(IS_NUMERIC).expression);
+        l_this_is_number  boolean := regexp_like(a_this, semver_common.src(semver_common.IS_NUMERIC).expression);
+        l_other_is_number boolean := regexp_like(a_other, semver_common.src(semver_common.IS_NUMERIC).expression);
         l_this            integer;
         l_other           integer;
     begin
@@ -349,7 +206,7 @@ create or replace package body semver_version_impl as
                         l_idx pls_integer := a_this.prerelease.count;
                     begin
                         while l_idx > 0 loop
-                            if regexp_like(a_this.prerelease(l_idx), src(IS_NUMERIC).expression) then
+                            if regexp_like(a_this.prerelease(l_idx), semver_common.src(semver_common.IS_NUMERIC).expression) then
                                 a_this.prerelease(l_idx) := a_this.prerelease(l_idx) + 1;
                                 l_idx := -1;
                             end if;
@@ -366,7 +223,7 @@ create or replace package body semver_version_impl as
                     -- 1.2.0-beta.1 bumps to 1.2.0-beta.2,
                     -- 1.2.0-beta.fooblz or 1.2.0-beta bumps to 1.2.0-beta.0
                     if a_this.prerelease(1) = a_identifier then
-                        if not regexp_like(a_this.prerelease(2), src(IS_NUMERIC).expression) then
+                        if not regexp_like(a_this.prerelease(2), semver_common.src(semver_common.IS_NUMERIC).expression) then
                             a_this.prerelease := new semver_tags(a_identifier, '0');
                         end if;
                     else
@@ -536,83 +393,7 @@ create or replace package body semver_version_impl as
     --};
     --
     --
-    --exports.Range = Range;
-    --function Range(range, loose) {
-    --  if ((range instanceof Range) && range.loose === loose)
-    --    return range;
-    --
-    --  if (!(this instanceof Range))
-    --    return new Range(range, loose);
-    --
-    --  this.loose = loose;
-    --
-    --  // First, split based on boolean or ||
-    --  this.raw = range;
-    --  this.set = range.split(/\s*\|\|\s*/).map(function(range) {
-    --    return this.parseRange(range.trim());
-    --  }, this).filter(function(c) {
-    --    // throw out any that are not relevant for whatever reason
-    --    return c.length;
-    --  });
-    --
-    --  if (!this.set.length) {
-    --    throw new TypeError('Invalid SemVer Range: ' + range);
-    --  }
-    --
-    --  this.format();
-    --}
-    --
-    --Range.prototype.format = function() {
-    --  this.range = this.set.map(function(comps) {
-    --    return comps.join(' ').trim();
-    --  }).join('||').trim();
-    --  return this.range;
-    --};
-    --
-    --Range.prototype.toString = function() {
-    --  return this.range;
-    --};
-    --
-    --Range.prototype.parseRange = function(range) {
-    --  var loose = this.loose;
-    --  range = range.trim();
-    --  debug('range', range, loose);
-    --  // `1.2.3 - 1.2.4` => `>=1.2.3 <=1.2.4`
-    --  var hr = loose ? re[HYPHENRANGELOOSE] : re[HYPHENRANGE];
-    --  range = range.replace(hr, hyphenReplace);
-    --  debug('hyphen replace', range);
-    --  // `> 1.2.3 < 1.2.5` => `>1.2.3 <1.2.5`
-    --  range = range.replace(re[COMPARATORTRIM], comparatorTrimReplace);
-    --  debug('comparator trim', range, re[COMPARATORTRIM]);
-    --
-    --  // `~ 1.2.3` => `~1.2.3`
-    --  range = range.replace(re[TILDETRIM], tildeTrimReplace);
-    --
-    --  // `^ 1.2.3` => `^1.2.3`
-    --  range = range.replace(re[CARETTRIM], caretTrimReplace);
-    --
-    --  // normalize spaces
-    --  range = range.split(/\s+/).join(' ');
-    --
-    --  // At this point, the range is completely trimmed and
-    --  // ready to be split into comparators.
-    --
-    --  var compRe = loose ? re[COMPARATORLOOSE] : re[COMPARATOR];
-    --  var set = range.split(' ').map(function(comp) {
-    --    return parseComparator(comp, loose);
-    --  }).join(' ').split(/\s+/);
-    --  if (this.loose) {
-    --    // in loose mode, throw out any that are not valid comparators
-    --    set = set.filter(function(comp) {
-    --      return !!comp.match(compRe);
-    --    });
-    --  }
-    --  set = set.map(function(comp) {
-    --    return new Comparator(comp, loose);
-    --  });
-    --
-    --  return set;
-    --};
+
     --
     -- Mostly just for testing and legacy API reasons
     --exports.toComparators = toComparators;
@@ -1030,17 +811,20 @@ create or replace package body semver_version_impl as
 
     ----------------------------------------------------------------------------
     function parse(a_value in varchar2) return semver_version is
-        l_result      semver_version;
-        l_semverParts semver_tags;
+        l_result                semver_version;
+        l_semverParts           semver_tags;
+        l_fullversionExpression semver_common.typ_regexp_expression := semver_common.src(semver_common.FULLVERSION).expression;
+        l_fullversionModifier   semver_common.typ_regexp_modifier := semver_common.src(semver_common.FULLVERSION).modifier;
     
         function parse_suffix
         (
             a_value             in varchar2,
-            a_identifier_regexp in varchar2
+            a_identifier_regexp in semver_common.typ_regexp_name
         ) return semver_tags is
             l_result semver_tags;
             e_divide_by_zero exception;
             pragma exception_init(e_divide_by_zero, -1476);
+            l_expression semver_common.typ_regexp_expression := semver_common.src(a_identifier_regexp).expression;
         begin
             -- NoFormat Start
             with identifier as
@@ -1048,7 +832,7 @@ create or replace package body semver_version_impl as
             select value bulk collect into l_result
               from identifier
              where -- raise exception when value is not numeric or nonnumeric identifier
-                   1 / case when regexp_like(value, '^' || src(a_identifier_regexp).expression || '$') then 1 else 0 end = 1;
+                   1 / case when regexp_like(value, '^' || l_expression || '$') then 1 else 0 end = 1;
             -- noformat end
             return l_result;
         exception
@@ -1063,12 +847,14 @@ create or replace package body semver_version_impl as
             raise_application_error(-20000, 'Value too long.');
         end if;
         --
-        if regexp_like(a_value, src(FULLVERSION).expression, src(FULLVERSION).modifier) then
+        if regexp_like(a_value,
+                       semver_common.src(semver_common.FULLVERSION).expression,
+                       semver_common.src(semver_common.FULLVERSION).modifier) then
             d.log('value satisfies FULLVERSION regexp');
             select value
               bulk collect
               into l_semverParts
-              from (select regexp_substr(a_value, src(FULLVERSION).expression, 1, 1, src(FULLVERSION).modifier, N) as value
+              from (select regexp_substr(a_value, l_fullversionExpression, 1, 1, l_fullversionModifier, N) as value
                       from dual, (select level as N from dual connect by level <= 5))
              where regexp_like(value, '[0-9]+') -- major, minor, patch
                 or value like '-%' -- prerelease
@@ -1082,16 +868,16 @@ create or replace package body semver_version_impl as
             if l_semverParts.count > 3 then
                 if l_semverParts(4) like '-%' then
                     d.log('parsing prerelease "' || l_semverParts(4) || '"');
-                    l_result.prerelease := parse_suffix(substr(l_semverParts(4), 2), PRERELEASEIDENTIFIER);
+                    l_result.prerelease := parse_suffix(substr(l_semverParts(4), 2), semver_common.PRERELEASEIDENTIFIER);
                 else
                     d.log('parsing build "' || l_semverParts(4) || '"');
-                    l_result.build := parse_suffix(substr(l_semverParts(4), 2), BUILDIDENTIFIER);
+                    l_result.build := parse_suffix(substr(l_semverParts(4), 2), semver_common.BUILDIDENTIFIER);
                 end if;
             end if;
             --
             if l_semverParts.count > 4 then
                 d.log('parsing build "' || l_semverParts(5) || '"');
-                l_result.build := parse_suffix(substr(l_semverParts(5), 2), BUILDIDENTIFIER);
+                l_result.build := parse_suffix(substr(l_semverParts(5), 2), semver_common.BUILDIDENTIFIER);
             end if;
             --
             d.log('successfully parsed');
@@ -1149,27 +935,5 @@ create or replace package body semver_version_impl as
         return valid(regexp_replace(a_value, '^[=v]+', ''));
     end;
 
-begin
-    src(IS_NUMERIC) := semver_common.regexpRecord('^[0-9]+$');
-    src(DELIMITERS) := semver_common.regexpRecord('(\.)|(\+)|-');
-    src(NUMERICIDENTIFIER) := semver_common.regexpRecord('0|[1-9]\d*');
-    src(NONNUMERICIDENTIFIER) := semver_common.regexpRecord('\d*[a-zA-Z-][a-zA-Z0-9-]*');
-    src(BUILDIDENTIFIER) := semver_common.regexpRecord('[0-9a-zA-Z-]+');
-    -- NoFormat Start
-    src(MAINVERSION) := semver_common.regexpRecord('(' || src(NUMERICIDENTIFIER).expression || ')\.' ||
-                                     '(' || src(NUMERICIDENTIFIER).expression || ')\.' ||
-                                     '(' || src(NUMERICIDENTIFIER).expression || ')');
-    src(PRERELEASEIDENTIFIER) := semver_common.regexpRecord('(' || src(NUMERICIDENTIFIER).expression ||
-                                              '|' || src(NONNUMERICIDENTIFIER).expression || ')');
-    src(PRERELEASE) := semver_common.regexpRecord('(-(' || src(PRERELEASEIDENTIFIER).expression ||
-                                    '(\.' || src(PRERELEASEIDENTIFIER).expression || ')*))');
-    src(BUILD) := semver_common.regexpRecord('(\+(' || src(BUILDIDENTIFIER).expression ||
-                               '(\.' || src(BUILDIDENTIFIER).expression || ')*))');
-    --
-    -- oracle's regexp implementation just sucks
-    --src(FULLVERSION) := regexpRecord('^' || 'v?' || src(MAINVERSION).expression || src(PRERELEASE).expression || '?' || src(BUILD).expression || '?' || '$');
-    -- simplified
-    src(FULLVERSION) := semver_common.regexpRecord('^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[a-zA-Z0-9\.-]*)?(\+[a-zA-Z0-9\.-]*)?$');
-    -- NoFormat End
 end;
 /
