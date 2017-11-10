@@ -92,7 +92,12 @@ create or replace package semver as
         version2 in varchar2
     ) return boolean;
 
-    -- cmp
+    function cmp
+    (
+        version1 in varchar2,
+        oper     in varchar2,
+        version2 in varchar2
+    ) return boolean;
 
     function valid(value in varchar2) return varchar2;
 

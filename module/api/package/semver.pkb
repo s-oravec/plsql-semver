@@ -300,7 +300,18 @@ create or replace package body semver as
         return semver_version_impl.lte(parse(version1), parse(version2));
     end;
 
-    -- cmp
+w    ----------------------------------------------------------------------------
+    function cmp
+    (
+        version1 in varchar2,
+        oper     in varchar2,
+        version2 in varchar2
+    ) return boolean is
+        l_version1 semver_version := parse(version1);
+        l_version2 semver_version := parse(version2);
+    begin
+        return semver_version_impl.cmp(l_version1, oper, l_version2);
+    end;
 
     ----------------------------------------------------------------------------
     function inc

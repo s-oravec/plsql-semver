@@ -76,6 +76,13 @@ create or replace package semver_version_impl as
         a_other in varchar2
     ) return semver.compare_result_type;
 
+    function cmp
+    (
+        a_this  in semver_version,
+        a_op    in varchar2,
+        a_other in semver_version
+    ) return boolean;
+
     function gt
     (
         a_this  in semver_version,
