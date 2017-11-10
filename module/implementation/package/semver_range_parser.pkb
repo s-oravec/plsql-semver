@@ -197,7 +197,7 @@ create or replace package body semver_range_parser as
         -- pre        ::= parts
         -- build      ::= parts
     
-        -- 1. take xr > major & normalize x to *
+        -- 1. take xr > major and normalize x to *
         l_major := take_xr;
         -- 2. if currentTokenType = tk_Dot > take dot and minor
         if currentTokenType = semver_lexer.tk_dot then

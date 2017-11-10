@@ -18,13 +18,3 @@ prompt .. Creating type SEMVER_RANGE
 
 prompt .. Creating package SEMVER
 @@package/semver.pks
-
-prompt .. Creating type body SEMVER_RANGE
-@@type/semver_range.tpb
-
-prompt .. Creating type body SEMVER_VERSION
-@@type/semver_version.tpb
-
-prompt .. Creating package body SEMVER
-@@package/semver.pkb
-

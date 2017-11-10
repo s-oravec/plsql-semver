@@ -1,0 +1,74 @@
+create or replace package ut_semver_cmp_fns as
+
+    description constant pete_types.typ_description := 'semver';
+
+    procedure comparison(d varchar2 := 'version1 should be greater than version2');
+
+end;
+/
+create or replace package body ut_semver_cmp_fns as
+
+    d debug := new debug('semver:test:semver_cmp_fns');
+
+    type version_pair_sample is record(
+        v1 varchar2(255),
+        v2 varchar2(255));
+    type version_pair_samples is table of version_pair_sample;
+
+    ----------------------------------------------------------------------------  
+    function vps
+    (
+        v1 varchar2,
+        v2 varchar2
+    ) return version_pair_sample is
+        l_result version_pair_sample;
+    begin
+        l_result.v1 := v1;
+        l_result.v2 := v2;
+        return l_result;
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure comparison(d varchar2) is
+        l_failed boolean := false;
+        -- NoFormat Start
+        samples version_pair_samples := version_pair_samples(
+            vps('0.0.0', '0.0.0-foo'),
+            vps('0.0.1', '0.0.0'),
+            vps('1.0.0', '0.9.9'),
+            vps('0.10.0', '0.9.0'),
+            vps('0.99.0', '0.10.0'),
+            vps('2.0.0', '1.2.3'),            
+            vps('1.2.3', '1.2.3-asdf'),
+            vps('1.2.3', '1.2.3-4'),
+            vps('1.2.3', '1.2.3-4-foo'),
+            vps('1.2.3-5-foo', '1.2.3-5'),
+            vps('1.2.3-5', '1.2.3-4'),
+            vps('1.2.3-5-foo', '1.2.3-5-Foo'),
+            vps('3.0.0', '2.7.2+asdf'),
+            vps('1.2.3-a.10', '1.2.3-a.5'),
+            vps('1.2.3-a.b', '1.2.3-a.5'),
+            vps('1.2.3-a.b', '1.2.3-a'),
+            vps('1.2.3-a.b.c.10.d.5', '1.2.3-a.b.c.5.d.100'),
+            vps('1.2.3-r2', '1.2.3-r100'),
+            vps('1.2.3-r100', '1.2.3-R2')
+        );
+        -- NoFormat End
+    begin
+        pete.set_method_description(d);
+        for i in 1 .. samples.count loop
+            begin
+                pete_assert.this(semver.gt(samples(i).v1, samples(i).v2), 'gt("' || samples(i).v1 || '","' || samples(i).v2 || '")');
+            exception
+                when others then
+                    l_failed := true;
+                    raise;
+            end;
+        end loop;
+        if l_failed then
+            pete_assert.fail('failed');
+        end if;
+    end;
+
+end;
+/

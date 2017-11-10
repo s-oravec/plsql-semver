@@ -53,7 +53,7 @@ create or replace package body semver as
     end;
 
     ----------------------------------------------------------------------------
-    function major(value in varchar2) return varchar2 is
+    function major(value in varchar2) return pls_integer is
         l_this semver_version;
     begin
         l_this := parse(value);
@@ -65,7 +65,7 @@ create or replace package body semver as
     end;
 
     ----------------------------------------------------------------------------
-    function minor(value in varchar2) return varchar2 is
+    function minor(value in varchar2) return pls_integer is
         l_this semver_version;
     begin
         l_this := parse(value);
@@ -77,12 +77,36 @@ create or replace package body semver as
     end;
 
     ----------------------------------------------------------------------------
-    function patch(value in varchar2) return varchar2 is
+    function patch(value in varchar2) return pls_integer is
         l_this semver_version;
     begin
         l_this := parse(value);
         if l_this is not null then
             return l_this.patch;
+        else
+            return null;
+        end if;
+    end;
+
+    ----------------------------------------------------------------------------
+    function prerelease(value in varchar2) return semver_tags is
+        l_this semver_version;
+    begin
+        l_this := parse(value);
+        if l_this is not null then
+            return l_this.prerelease;
+        else
+            return null;
+        end if;
+    end;
+
+    ----------------------------------------------------------------------------
+    function build(value in varchar2) return semver_tags is
+        l_this semver_version;
+    begin
+        l_this := parse(value);
+        if l_this is not null then
+            return l_this.build;
         else
             return null;
         end if;

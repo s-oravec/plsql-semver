@@ -1,0 +1,3 @@
+# semver
+
+[Semver 2.0.0](http://www.semver.org)PL/SQL implementation - not yet ...

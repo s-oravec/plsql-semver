@@ -22,11 +22,15 @@ create or replace package semver as
         version2 in varchar2
     ) return varchar2;
 
-    function major(value in varchar2) return varchar2;
+    function major(value in varchar2) return pls_integer;
 
-    function minor(value in varchar2) return varchar2;
+    function minor(value in varchar2) return pls_integer;
 
-    function patch(value in varchar2) return varchar2;
+    function patch(value in varchar2) return pls_integer;
+
+    function prerelease(value in varchar2) return semver_tags;
+
+    function build(value in varchar2) return semver_tags;
 
     function compare
     (

@@ -4,7 +4,7 @@ create or replace package body semver_range_impl as
 
     --exports.Range = Range;
     --function Range(range, loose) {
-    --  if ((range instanceof Range) && range.loose === loose)
+    --  if ((range instanceof Range) and range.loose === loose)
     --    return range;
     --
     --  if (!(this instanceof Range))
@@ -62,7 +62,7 @@ create or replace package body semver_range_impl as
     */
     
     function parse(a_value in varchar2) return semver_range is
-      l_rangeSet semver_ast_rangeset;
+      l_rangeSet semver_ast;
     begin
       semver_range_parser.initialize(a_value);
       l_rangeSet := semver_range_parser.parse;

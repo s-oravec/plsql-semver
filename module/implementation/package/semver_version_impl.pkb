@@ -17,18 +17,30 @@ create or replace package body semver_version_impl as
         if l_this_is_number and l_other_is_number then
             l_this  := to_number(a_this);
             l_other := to_number(a_other);
-        end if;
-        -- NoFormat Start
-        return 
-            semver_util.ternary_pls_integer(l_this_is_number and not l_other_is_number, -1, 
-                semver_util.ternary_pls_integer(l_other_is_number and not l_this_is_number,  1, 
-                    semver_util.ternary_pls_integer(l_this < l_other, -1,
-                        semver_util.ternary_pls_integer(l_this > l_other,  1, 0)
+            -- NoFormat Start
+            return 
+                semver_util.ternary_pls_integer(l_this_is_number and not l_other_is_number, -1, 
+                    semver_util.ternary_pls_integer(l_other_is_number and not l_this_is_number,  1, 
+                        semver_util.ternary_pls_integer(l_this < l_other, -1,
+                            semver_util.ternary_pls_integer(l_this > l_other,  1, 0)
+                        )
                     )
                 )
-            )
-        ;
-        -- NoFormat End
+            ;
+            -- NoFormat End
+        else
+            -- NoFormat Start
+            return 
+                semver_util.ternary_pls_integer(l_this_is_number and not l_other_is_number, -1, 
+                    semver_util.ternary_pls_integer(l_other_is_number and not l_this_is_number,  1, 
+                        semver_util.ternary_pls_integer(a_this < a_other, -1,
+                            semver_util.ternary_pls_integer(a_this > a_other,  1, 0)
+                        )
+                    )
+                )
+            ;
+            -- NoFormat End        
+        end if;
     end;
 
     ----------------------------------------------------------------------------  
@@ -83,11 +95,12 @@ create or replace package body semver_version_impl as
         end if;
         --
         loop
-            if a_this.prerelease(l_idx) is null and a_other.prerelease(l_idx) is null then
+            
+            if l_idx > a_this.prerelease.count and l_idx > a_other.prerelease.count then
                 return semver.COMPARE_RESULT_EQ;
-            elsif a_other.prerelease(l_idx) is null then
+            elsif l_idx > a_other.prerelease.count then
                 return semver.COMPARE_RESULT_GT;
-            elsif a_this.prerelease(l_idx) is null then
+            elsif l_idx > a_this.prerelease.count  then
                 return semver.COMPARE_RESULT_LT;
             elsif a_this.prerelease(l_idx) = a_other.prerelease(l_idx) then
                 null;
@@ -544,7 +557,7 @@ create or replace package body semver_version_impl as
     --    var xp = xm || isX(p);
     --    var anyX = xp;
     --
-    --    if (gtlt === '=' && anyX)
+    --    if (gtlt === '=' and anyX)
     --      gtlt = '';
     --
     --    if (xM) {
@@ -555,7 +568,7 @@ create or replace package body semver_version_impl as
     --        // nothing is forbidden
     --        ret = '*';
     --      }
-    --    } else if (gtlt && anyX) {
+    --    } else if (gtlt and anyX) {
     --      // replace X with 0
     --      if (xm)
     --        m = 0;
@@ -673,8 +686,8 @@ create or replace package body semver_version_impl as
     --
     --      if (set[i].semver.prerelease.length > 0) {
     --        var allowed = set[i].semver;
-    --        if (allowed.major === version.major &&
-    --            allowed.minor === version.minor &&
+    --        if (allowed.major === version.major and
+    --            allowed.minor === version.minor and
     --            allowed.patch === version.patch)
     --          return true;
     --      }
@@ -798,10 +811,10 @@ create or replace package body semver_version_impl as
     --
     --    // If the lowest version comparator has an operator and our version
     --    // is less than it then it isn't higher than the range
-    --    if ((!low.operator || low.operator === comp) &&
+    --    if ((!low.operator || low.operator === comp) and
     --        ltefn(version, low.semver)) {
     --      return false;
-    --    } else if (low.operator === ecomp && ltfn(version, low.semver)) {
+    --    } else if (low.operator === ecomp and ltfn(version, low.semver)) {
     --      return false;
     --    }
     --  }
@@ -851,6 +864,7 @@ create or replace package body semver_version_impl as
                        semver_common.src(semver_common.FULLVERSION).expression,
                        semver_common.src(semver_common.FULLVERSION).modifier) then
             d.log('value satisfies FULLVERSION regexp');
+            -- strip (v|=|\s) and \s* from end
             select value
               bulk collect
               into l_semverParts
@@ -884,6 +898,7 @@ create or replace package body semver_version_impl as
             return l_result;
             --
         else
+            d.log('does not satisy FULLVERSION regexp');
             raise_application_error(-20000, 'Invalid SemVer string "' || a_value || '"');
         end if;
         --

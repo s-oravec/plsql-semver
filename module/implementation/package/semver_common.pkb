@@ -42,7 +42,11 @@ begin
     -- oracle's regexp implementation just sucks
     --g_src(FULLVERSION) := regexpRecord('^' || 'v?' || g_src(MAINVERSION).expression || g_src(PRERELEASE).expression || '?' || g_src(BUILD).expression || '?' || '$');
     -- simplified
-    g_src(FULLVERSION) := regexpRecord('^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[a-zA-Z0-9\.-]*)?(\+[a-zA-Z0-9\.-]*)?$');
+
+    -- TODO: should be only v? as [[:space:]=v]* is loose = true and we implement strict only
+    -- TODO: change this and fix tests also
+    -- TODO: leave comment for future loose implementation
+    g_src(FULLVERSION) := regexpRecord('^[[:space:]=v]*(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[a-zA-Z0-9\.-]*)?(\+[a-zA-Z0-9\.-]*)?[[:space:]]*$');
     g_src(GTLT) := regexpRecord('((<|>)?=?)');
 
     g_src(XRANGEIDENTIFIER) := regexpRecord(src(NUMERICIDENTIFIER).expression || '|x|X|\*');
@@ -53,23 +57,23 @@ begin
     --                   '(?:' + src[PRERELEASE] + ')?' +
     --                   src[BUILD] + '?' +
     --                   ')?)?';
-    g_src(XRANGEPLAIN) := regexpRecord('[v=\s]*(' || src(XRANGEIDENTIFIER).expression || ')' ||
+    g_src(XRANGEPLAIN) := regexpRecord('[[:space:]=v]*(' || src(XRANGEIDENTIFIER).expression || ')' ||
                        '(\.(' || src(XRANGEIDENTIFIER).expression || ')' ||
                        '(\.(' || src(XRANGEIDENTIFIER).expression || ')' ||
                        '(' || src(PRERELEASE).expression || ')?' ||
                        src(BUILD).expression || '?' ||
                        ')?)?');
     --src[XRANGE] = '^' + src[GTLT] + '\\s*' + src[XRANGEPLAIN] + '$';
-    g_src(XRANGE) := regexpRecord('^' || src(GTLT).expression || '\s*' || src(XRANGEPLAIN).expression || '$');
+    g_src(XRANGE) := regexpRecord('^' || src(GTLT).expression || '[[:space:]]*' || src(XRANGEPLAIN).expression || '$');
     g_src(LONETILDE) := regexpRecord('(~>?)');
     --src[TILDETRIM] = '(\\s*)' + src[LONETILDE] + '\\s+';
-    g_src(TILDETRIM) := regexpRecord('(\s*)' || src(LONETILDE).expression || '\s+');
+    g_src(TILDETRIM) := regexpRecord('([[:space:]]*)' || src(LONETILDE).expression || '[[:space:]]+');
     --src[TILDE] = '^' + src[LONETILDE] + src[XRANGEPLAIN] + '$';
     g_src(TILDE) := regexpRecord('^' || src(LONETILDE).expression || src(XRANGEPLAIN).expression || '$');
     --src[LONECARET] = '(?:\\^)';
     g_src(LONECARET) := regexpRecord('(\^)');
     --src[CARETTRIM] = '(\\s*)' + src[LONECARET] + '\\s+';
-    g_src(CARETTRIM) := regexpRecord('(\s*)' || src(LONECARET).expression || '\s+');
+    g_src(CARETTRIM) := regexpRecord('([[:space:]]*)' || src(LONECARET).expression || '[[:space:]]+');
     --src[CARET] = '^' + src[LONECARET] + src[XRANGEPLAIN] + '$';
     g_src(CARET) := regexpRecord('^' || src(LONECARET).expression || src(XRANGEPLAIN).expression || '$');
     --src[COMPARATOR] = '^' + src[GTLT] + '\\s*(' + FULLPLAIN + ')$|^$';
@@ -83,12 +87,12 @@ begin
     --                   '\\s+-\\s+' +
     --                   '(' + src[XRANGEPLAIN] + ')' +
     --                   '\\s*$';
-    g_src(HYPHENRANGE) := regexpRecord('^\s*(' || src(XRANGEPLAIN).expression || ')' ||
-                       '\s+-\s+' ||
+    g_src(HYPHENRANGE) := regexpRecord('^[[:space:]]*(' || src(XRANGEPLAIN).expression || ')' ||
+                       '[[:space:]]+-\[[:space:]]+' ||
                        '(' || src(XRANGEPLAIN).expression || ')' ||
-                       '\s*$');
+                       '[[:space:]]*$');
     --src[STAR] = '(<|>)?=?\\s*\\*';
-    g_src(STAR) := regexpRecord('(<|>)?=?\s*\*');
+    g_src(STAR) := regexpRecord('(<|>)?=?[[:space:]]*\*');
     -- NoFormat End
 
 end;

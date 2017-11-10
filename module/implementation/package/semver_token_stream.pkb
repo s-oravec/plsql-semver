@@ -1,7 +1,7 @@
 create or replace package body semver_token_stream as
 
     -- list of tokens returned
-    g_tokens plex_tokens;
+    g_tokens semver_tokens;
     -- current index
     g_index pls_integer;
     --
@@ -19,19 +19,19 @@ create or replace package body semver_token_stream as
     begin
         semver_ast_registry.initialize;
         g_cachedAstMemo.delete();
-        g_tokens          := plex.tokens;
+        g_tokens          := semver_lexer.tokens;
         g_index           := 1;
         g_snapshotIndexes := semver_integer_stack();
     end;
 
     ----------------------------------------------------------------------------
-    function currentToken return plex_token is
+    function currentToken return semver_token is
     begin
         return g_tokens(g_index);
     end;
 
     ----------------------------------------------------------------------------
-    function isMatch(TokenType plex.token_type) return boolean is
+    function isMatch(TokenType semver_lexer.token_type) return boolean is
     begin
         if currentToken().tokenType = TokenType then
             return true;
@@ -55,7 +55,7 @@ create or replace package body semver_token_stream as
     ----------------------------------------------------------------------------
     function eof(p_lookahead pls_integer) return boolean is
     begin
-        if g_tokens is null or g_index + p_lookahead > g_tokens.count or currentToken().tokenType = plex.tk_EOF then
+        if g_tokens is null or g_index + p_lookahead > g_tokens.count or currentToken().tokenType = semver_lexer.tk_EOF then
             return true;
         else
             return false;
@@ -69,7 +69,7 @@ create or replace package body semver_token_stream as
     end;
 
     ----------------------------------------------------------------------------
-    function peek(p_lookahead pls_integer) return plex_token is
+    function peek(p_lookahead pls_integer) return semver_token is
     begin
         if eof(p_lookahead) then
             return null;
@@ -124,8 +124,8 @@ create or replace package body semver_token_stream as
     end;
 
     ----------------------------------------------------------------------------
-    function take(tokenType plex.token_type) return plex_token is
-        l_current plex_token;
+    function take(tokenType semver_lexer.token_type) return semver_token is
+        l_current semver_token;
     begin
         if isMatch(tokenType) then
             l_current := currentToken();
@@ -137,39 +137,19 @@ create or replace package body semver_token_stream as
     end;
 
     ----------------------------------------------------------------------------
-    procedure take(tokenType plex.token_type) is
-        l_token plex_token;
+    procedure take(tokenType semver_lexer.token_type) is
+        l_token semver_token;
     begin
         l_token := take(tokenType);
     end;
 
     ----------------------------------------------------------------------------
-    function take return plex_token is
-        l_Result plex_token;
+    function take return semver_token is
+        l_Result semver_token;
     begin
         l_Result := currentToken();
         consume;
         return l_Result;
-    end;
-
-    ----------------------------------------------------------------------------
-    function takeReservedWord(Text varchar2) return plex_token is
-        l_current plex_token;
-    begin
-        if isMatch(plex.tk_Word) and currentToken().matchText(Text) then
-            l_current := currentToken();
-            consume;
-            return l_current;
-        end if;
-        -- TODO: rewrite without exception
-        raise_application_error(-20000, 'Invalid syntax. Expecting reserved word ' || Text || ' but got ' || currentToken().text);
-    end;
-
-    ----------------------------------------------------------------------------
-    procedure takeReservedWord(Text varchar2) is
-        l_token plex_token;
-    begin
-        l_token := takeReservedWord(Text);
     end;
 
     ----------------------------------------------------------------------------
