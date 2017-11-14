@@ -53,6 +53,16 @@ create or replace package body semver_range_parser as
     begin
         return semver_token_stream.currentToken().text;
     end;
+    
+    ----------------------------------------------------------------------------
+    function currentTokenInfo return varchar2 is
+    begin
+        return semver_util.ternary_varchar2(
+            currentTokenText is null,
+            currentTokenType,
+            currentTokenText
+        );
+    end;
 
     ----------------------------------------------------------------------------
     procedure raiseUnexpectedToken(tokenType in semver_lexer.token_type) is
@@ -144,22 +154,23 @@ create or replace package body semver_range_parser as
     end;
 
     ----------------------------------------------------------------------------  
-    function match_tags return semver_ast_tags is
+    function take_tags return semver_ast_tags is
         l_tags semver_tags := new semver_tags();
         procedure takeTag is
         begin
-            if currentTokenType in (semver_lexer.tk_Numeric, semver_lexer.tk_Ascii) then
+            -- todo: add takeAny to semver_token_stream
+            if currentTokenType in then (semver_lexer.tk_Numeric, semver_lexer.tk_Ascii) 
                 l_tags.extend();
                 l_tags(l_tags.count) := currentTokenText;
                 d.log('got tag: ' || currentTokenText);
                 semver_token_stream.consume;
             else
-                d.log('unexpected token' || currentTokenType);
+                d.log('unexpected token: ' || currentTokenInfo);
                 raiseUnexpectedToken;
             end if;
         end;
     begin
-        d.log('matching tags');
+        d.log('take tags');
         semver_token_stream.takeSnapshot;
         -- parts      ::= part ( '.' part ) *
         -- part ::= nr | [-0-9A-Za-z]+    
@@ -168,7 +179,7 @@ create or replace package body semver_range_parser as
         -- 2. take other if currentTokenType is tk_Dot  
         while currentTokenType = semver_lexer.tk_Dot loop
             semver_token_stream.consume;
-            takeTag;
+            t;
         end loop;
         --
         semver_token_stream.commitSnapshot;
@@ -177,7 +188,6 @@ create or replace package body semver_range_parser as
     exception
         when others then
             d.log('exception> ' || sqlerrm);
-            semver_token_stream.rollbackSnapshot;
             raise;
     end;
 
@@ -229,12 +239,12 @@ create or replace package body semver_range_parser as
         -- 4. if currentTokenType = tk_Hyphen > take prerelease
         if currentTokenType = semver_lexer.tk_hyphen then
             semver_token_stream.consume;
-            l_prerelease := match_tags;
+            l_prerelease := take_tags;
         end if;
-        -- 5. if currentTokenType = tk_Plus > take prerelease
+        -- 5. if currentTokenType = tk_Plus > take build
         if currentTokenType = semver_lexer.tk_plus then
             semver_token_stream.consume;
-            l_build := match_tags;
+            l_build := take_tags;
         end if;
         --
         l_result := semver_ast_partial.createNew(l_major, l_minor, l_patch, l_prerelease, l_build);

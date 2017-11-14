@@ -28,7 +28,7 @@ create or replace package body semver_range_impl as
         l_ast_rangeset semver_ast_rangeset;
         l_range_set    semver_range_set;
     begin
-        d.log('parse: ' || a_value);
+        d.log('parse: "' || a_value || '"');
         d.log('initialize parser');
         semver_range_parser.initialize(a_value);
         begin

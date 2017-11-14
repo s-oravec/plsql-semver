@@ -58,6 +58,7 @@ create or replace package body semver_lexer as
     ----------------------------------------------------------------------------
     procedure initialize(a_value in varchar2) is
     begin
+        d.log('initializing lexer with value: "' || a_value || '"');
         -- set indexes (we index from 1 in PLSQL)
         g_index := 1;
         -- init snapshot global stacks

@@ -24,6 +24,7 @@ create or replace package body semver_ast_registry as
     ----------------------------------------------------------------------------
     procedure unregister(ast in out nocopy semver_ast) is
     begin
+        d.log('unregistering [' || ast.id_registry || ']: ' || ast.toString());
         g_ast_registry.delete(ast.id_registry);
         ast.id_registry := null;
     end;
