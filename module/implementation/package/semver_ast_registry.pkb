@@ -1,5 +1,7 @@
 create or replace package body semver_ast_registry as
 
+    d debug := new debug('semver:ast_registry');
+
     type typ_ast_table is table of semver_ast;
     g_ast_registry typ_ast_table;
 
@@ -7,6 +9,7 @@ create or replace package body semver_ast_registry as
     procedure initialize is
     begin
         g_ast_registry := typ_ast_table();
+        d.log('initialized');
     end;
 
     ----------------------------------------------------------------------------  
@@ -15,6 +18,7 @@ create or replace package body semver_ast_registry as
         g_ast_registry.extend();
         g_ast_registry(g_ast_registry.last) := ast;
         ast.id_registry := g_ast_registry.last;
+        d.log('registered [' || ast.id_registry || ']: ' || ast.toString());
     end;
 
     ----------------------------------------------------------------------------
@@ -27,6 +31,7 @@ create or replace package body semver_ast_registry as
     ----------------------------------------------------------------------------
     function get_by_id(id_registry in integer) return semver_ast is
     begin
+        d.log('getting id: ' || id_registry);
         return g_ast_registry(id_registry);
     end;
 

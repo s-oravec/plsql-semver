@@ -7,11 +7,7 @@ create or replace type semver_ast_tags under semver_AST
 
     static function createNew(tags in semver_tags) return semver_ast_tags,
 
-    overriding member function toString
-    (
-        lvl       integer default 0,
-        verbosity integer default 0
-    ) return varchar2
+    overriding member function toString return varchar2
 
 )
 /

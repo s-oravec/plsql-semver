@@ -48,45 +48,18 @@ create or replace type body semver_ast as
     end;
 
     ----------------------------------------------------------------------------
-    member function toString
-    (
-        lvl       integer default 0,
-        verbosity integer default 0
-    ) return varchar2 is
-        l_result varchar2(32767);
-        l_child  semver_ast;
-    
-        function strMe return varchar2 is
-        begin
-            if verbosity = 0 then
-                return self.symbol_type;
-            else
-                return chr(10) || lpad(' ', 2 * lvl, ' ') || self.symbol_type;
-            end if;
-        end;
-    
-        function strAfterChildren return varchar2 is
-        begin
-            if verbosity = 0 then
-                return null;
-            else
-                return chr(10) || lpad(' ', 2 * lvl, ' ');
-            end if;
-        end;
-    
+    member function toString return varchar2 is
+        l_children_tostring varchar2(32767);
+        l_child             semver_ast;
     begin
         if self.children.count > 0 then
             for idx in 1 .. self.children.count loop
-                l_child := semver_ast_registry.get_by_id(self.children(idx));
-                if idx = 1 then
-                    l_result := l_result || l_child.toString(lvl + 1, verbosity);
-                else
-                    l_result := l_result || ',' || l_child.toString(lvl + 1, verbosity);
-                end if;
+                l_child             := semver_ast_registry.get_by_id(self.children(idx));
+                l_children_tostring := l_children_tostring ||
+                                       semver_util.ternary_varchar2(idx = 1, l_child.toString(), ',' || l_child.toString());
             end loop;
-            return strMe || '(' || l_result || strAfterChildren || ')';
         end if;
-        return strMe;
+        return '{ast:' || self.symbol_type || ',ranges:[' || l_children_tostring || ']}';
     end;
 
     ----------------------------------------------------------------------------

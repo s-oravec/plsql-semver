@@ -25,7 +25,7 @@ create or replace type body semver_matchASCII as
             return null;
         end if;
         -- consume all [a-zA-Z0-9-]
-        while not semver_lexer.eof and regexp_like(semver_lexer.currentItem, '[a-ZA-Z0-9-]') loop
+        while not semver_lexer.eof and regexp_like(semver_lexer.currentItem, '[a-zA-Z0-9-]') loop
             consumeAndAppend;
         end loop;
         --

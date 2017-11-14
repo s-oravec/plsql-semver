@@ -1,8 +1,11 @@
-create or replace type semver_ast_RangeSet under semver_AST (
+create or replace type semver_ast_RangeSet under semver_AST
+(
 
-    CONSTRUCTOR FUNCTION semver_ast_RangeSet(ranges semver_AstChildren) RETURN SELF AS Result,
+    constructor function semver_ast_RangeSet(ranges semver_AstChildren) return self as result,
 
-    STATIC FUNCTION createNew(ranges semver_AstChildren) RETURN semver_ast_RangeSet
-    
+    static function createNew(ranges semver_AstChildren) return semver_ast_RangeSet,
+
+    member function get_range_set return semver_range_set
+
 )
 /

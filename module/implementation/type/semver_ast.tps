@@ -15,11 +15,7 @@ create or replace type semver_ast as object
 
     member procedure addChild(child semver_ast),
 
-    member function toString
-    (
-        lvl       integer default 0,
-        verbosity integer default 0
-    ) return varchar2,
+    member function toString return varchar2,
 
     member function executeAst return semver_ast
 

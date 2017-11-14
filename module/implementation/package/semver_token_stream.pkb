@@ -1,5 +1,7 @@
 create or replace package body semver_token_stream as
 
+    d debug := new debug('semver:token_stream');
+
     -- list of tokens returned
     g_tokens semver_tokens;
     -- current index
@@ -87,6 +89,7 @@ create or replace package body semver_token_stream as
     ----------------------------------------------------------------------------
     procedure takeSnapshot is
     begin
+        d.log('snapshot at: ' || g_index);
         g_snapshotIndexes.push(g_index);
     end;
 
@@ -94,12 +97,14 @@ create or replace package body semver_token_stream as
     procedure rollbackSnapshot is
     begin
         g_index := g_snapshotIndexes.pop();
+        d.log('rolling back to: ' || g_index);
     end;
 
     ----------------------------------------------------------------------------
     procedure commitSnapshot is
     begin
         g_snapshotIndexes.pop();
+        d.log('commit at: ' || g_index);
     end;
 
     ----------------------------------------------------------------------------

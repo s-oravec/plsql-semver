@@ -1,5 +1,7 @@
 create or replace package body semver_range_parser as
 
+    d debug := new debug('semver:range_parser');
+
     ----------------------------------------------------------------------------
     procedure initialize(a_value in varchar2) is
     begin
@@ -69,6 +71,7 @@ create or replace package body semver_range_parser as
     ----------------------------------------------------------------------------
     procedure raiseExpectedSymbolNotFound(a_expected_symbol ast_symbol_type) is
     begin
+        d.log('Expected symbol ' || a_expected_symbol || ' not found at position: ' || semver_token_stream.currentToken().sourceIndex);
         raise_application_error(-20000,
                                 'Expected symbol ' || a_expected_symbol || ' not found at position: ' || semver_token_stream.currentToken()
                                 .sourceIndex);
@@ -129,31 +132,37 @@ create or replace package body semver_range_parser as
 
     ----------------------------------------------------------------------------  
     procedure eatSpaces is
+        l_consumed boolean := false;
     begin
         while currentTokenType = semver_lexer.tk_Space loop
+            l_consumed := true;
             semver_token_stream.consume;
         end loop;
+        if l_consumed then
+            d.log('spaces eaten');
+        end if;
     end;
 
     ----------------------------------------------------------------------------  
     function match_tags return semver_ast_tags is
         l_tags semver_tags := new semver_tags();
-    
         procedure takeTag is
         begin
             if currentTokenType in (semver_lexer.tk_Numeric, semver_lexer.tk_Ascii) then
                 l_tags.extend();
                 l_tags(l_tags.count) := currentTokenText;
+                d.log('got tag: ' || currentTokenText);
                 semver_token_stream.consume;
             else
+                d.log('unexpected token' || currentTokenType);
                 raiseUnexpectedToken;
             end if;
         end;
-    
     begin
+        d.log('matching tags');
+        semver_token_stream.takeSnapshot;
         -- parts      ::= part ( '.' part ) *
-        -- part ::= nr | [-0-9A-Za-z]+
-    
+        -- part ::= nr | [-0-9A-Za-z]+    
         -- 1. take first part = tag
         takeTag;
         -- 2. take other if currentTokenType is tk_Dot  
@@ -162,8 +171,14 @@ create or replace package body semver_range_parser as
             takeTag;
         end loop;
         --
+        semver_token_stream.commitSnapshot;
         return semver_ast_tags.createNew(l_tags);
         --
+    exception
+        when others then
+            d.log('exception> ' || sqlerrm);
+            semver_token_stream.rollbackSnapshot;
+            raise;
     end;
 
     ----------------------------------------------------------------------------  
@@ -174,6 +189,7 @@ create or replace package body semver_range_parser as
     
         l_prerelease semver_ast_tags;
         l_build      semver_ast_tags;
+        l_result     semver_ast_partial;
     
         function take_xr return varchar2 is
             l_result varchar2(255);
@@ -196,7 +212,8 @@ create or replace package body semver_range_parser as
         -- qualifier  ::= ( '-' pre )? ( '+' build )?
         -- pre        ::= parts
         -- build      ::= parts
-    
+        semver_token_stream.takeSnapshot;
+        d.log('matching partial');
         -- 1. take xr > major and normalize x to *
         l_major := take_xr;
         -- 2. if currentTokenType = tk_Dot > take dot and minor
@@ -220,8 +237,16 @@ create or replace package body semver_range_parser as
             l_build := match_tags;
         end if;
         --
-        return semver_ast_partial.createNew(null, l_major, l_minor, l_patch, l_prerelease, l_build);
+        l_result := semver_ast_partial.createNew(l_major, l_minor, l_patch, l_prerelease, l_build);
+        d.log('matched simple: ' || l_result.toString());
+        semver_token_stream.commitSnapshot;
+        --        
+        return l_result;
         --
+    exception
+        when others then
+            semver_token_stream.rollbackSnapshot;
+            return null;
     end;
 
     ----------------------------------------------------------------------------  
@@ -234,7 +259,7 @@ create or replace package body semver_range_parser as
         -- tilde  ::= '~' partial
         -- caret  ::= '^' partial
         -- primitive  ::= ( '<' | '>' | '>=' | '<=' | '=' | ) partial
-    
+        d.log('matching simple');
         -- 1. match modifier
         -- 1.1. if currentTokenType in (tilde, caret, lt, gt, lte, gte, eq)
         if currentTokenType in (semver_lexer.tk_tilde,
@@ -265,47 +290,55 @@ create or replace package body semver_range_parser as
             l_comparator_type := COMPARATOR_TYPE_PRIMITIVE;
         end if;
         -- 2. match partial
-        return semver_ast_comparator.createNew(null, l_comparator_type, l_modifier, match_partial);
+        return semver_ast_comparator.createNew(l_comparator_type, l_modifier, match_partial);
     end;
 
     ----------------------------------------------------------------------------  
     function match_range return semver_ast_range is
-        l_comparators semver_AstChildren := semver_AstChildren();
+        l_comparators semver_AstChildren;
     begin
+        d.log('matching range');
         -- range ::= hyphen | simple ( ' ' simple ) * | ''
-        -- 1. snapshot
-        semver_token_stream.takeSnapshot;
         -- 2. hyphen?
         -- hyphen ::= partial ' - ' partial
+        -- 1. snapshot - is done in match_partial
+        semver_token_stream.takeSnapshot;
+        l_comparators := semver_AstChildren();
         -- 2.1. match partial
-        if not appendToList(match_partial, l_comparators) then
-            semver_token_stream.rollbackSnapshot;
-            raiseExpectedSymbolNotFound(ast_Partial);
-        end if;
-        -- 2.2. if current token != space 
-        if currentTokenType != semver_lexer.tk_Space then
-            -- 2.2.1. rollback and match simple list in 3.
-            semver_token_stream.rollbackSnapshot;
+        -- TODO: rewrite this
+        if appendToList(match_partial, l_comparators) then
+            begin
+                -- 2.2. if current token != space 
+                if currentTokenType = semver_lexer.tk_Space then
+                    -- 2.3. else 
+                    -- 2.3.1. match space
+                    semver_token_stream.take(semver_lexer.tk_Space);
+                    -- 2.3.2. match hyphen
+                    semver_token_stream.take(semver_lexer.tk_hyphen);
+                    -- 2.3.3. match space
+                    semver_token_stream.take(semver_lexer.tk_Space);
+                    -- 2.3.4. match partial
+                    if appendToList(match_partial, l_comparators) then
+                        -- 2.3.5 return hyphen range
+                        d.log('matched hyphen range');
+                        return semver_ast_range.createNew(RANGE_TYPE_HYPHEN, l_comparators);
+                    else
+                        semver_token_stream.rollbackSnapshot;
+                    end if;
+                else
+                    semver_token_stream.rollbackSnapshot;
+                end if;
+            exception
+                when others then
+                    semver_token_stream.rollbackSnapshot;
+            end;
         else
-            -- 2.3. else 
-            -- 2.3.1. match space
-            semver_token_stream.take(semver_lexer.tk_Space);
-            -- 2.3.2. match hyphen
-            semver_token_stream.take(semver_lexer.tk_hyphen);
-            -- 2.3.3. match space
-            semver_token_stream.take(semver_lexer.tk_Space);
-            -- 2.3.4. match partial
-            if not appendToList(match_partial, l_comparators) then
-                semver_token_stream.rollbackSnapshot;
-                raiseExpectedSymbolNotFound(ast_Partial);
-            end if;
-            -- 2.3.5 return hyphen range
-            -- TODO: remove text from semver_ast_range
-            return semver_ast_range.createNew(null, RANGE_TYPE_HYPHEN, l_comparators);
+            semver_token_stream.rollbackSnapshot;
         end if;
         -- 3. match simple list
         -- simple ( ' ' simple ) *
         semver_token_stream.takeSnapshot;
+        l_comparators := semver_AstChildren();
         -- 3.1. match simple
         if not appendToList(match_simple, l_comparators) then
             semver_token_stream.rollbackSnapshot;
@@ -320,13 +353,15 @@ create or replace package body semver_range_parser as
             end if;
         end loop;
         -- 3.3. return simple-list comparator
-        return semver_ast_range.createNew(null, RANGE_TYPE_SIMPLE_LIST, l_comparators);
+        return semver_ast_range.createNew(RANGE_TYPE_SIMPLE_LIST, l_comparators);
     end;
 
     ----------------------------------------------------------------------------  
     function match_range_set return semver_ast_rangeset is
         l_ranges semver_AstChildren := semver_AstChildren();
     begin
+        --
+        d.log('matching range_set');
         -- range-set ::= range ( logical-or range ) *
         -- range
         semver_token_stream.takeSnapshot;
@@ -338,11 +373,11 @@ create or replace package body semver_range_parser as
         -- ( ' ' ) * '||' ( ' ' ) *
         eatSpaces;
         while currentTokenType != semver_lexer.tk_EOF loop
-        
+            d.log('matching || operator');
             semver_token_stream.take(semver_lexer.tk_Pipe);
             semver_token_stream.take(semver_lexer.tk_Pipe);
             eatSpaces;
-        
+            d.log('matching another');
             semver_token_stream.takeSnapshot;
             if not appendToList(match_range, l_ranges) then
                 semver_token_stream.rollbackSnapshot;
@@ -352,16 +387,18 @@ create or replace package body semver_range_parser as
         end loop;
         --
         if currentTokenType != semver_lexer.tk_EOF then
+            d.log('Unexpected token');
             raiseUnexpectedToken;
+        else
+            return semver_ast_rangeset.createNew(l_ranges);
         end if;
-        --
-        return semver_ast_rangeset.createNew(l_ranges);
         --
     end;
 
     ----------------------------------------------------------------------------
-    function parse return semver_ast is
+    function parse return semver_ast_rangeset is
     begin
+        d.log('begin parsing');
         return match_range_set;
     end;
 

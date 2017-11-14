@@ -1,5 +1,7 @@
 create or replace package body semver as
 
+    d debug := new debug('semver');
+
     ----------------------------------------------------------------------------
     function parse(value in varchar2) return semver_version is
     begin
@@ -300,7 +302,7 @@ create or replace package body semver as
         return semver_version_impl.lte(parse(version1), parse(version2));
     end;
 
-w    ----------------------------------------------------------------------------
+    ----------------------------------------------------------------------------
     function cmp
     (
         version1 in varchar2,
@@ -341,6 +343,31 @@ w    ---------------------------------------------------------------------------
     function clean(value in varchar2) return varchar2 is
     begin
         return semver_version_impl.clean(value);
+    end;
+
+    ----------------------------------------------------------------------------  
+    function satisfies
+    (
+        version in varchar2,
+        range   in varchar2
+    ) return boolean is
+    begin
+        null;
+    end;
+
+    ----------------------------------------------------------------------------
+    function parse_range(value in varchar2) return varchar2 is
+        l_range_set semver_range_set;
+    begin
+        l_range_set := semver_range_impl.parse(value);
+        if l_range_set is null then
+            return null;
+        else
+            return l_range_set.to_string();
+        end if;
+    exception
+        when others then
+            return null;
     end;
 
 end;

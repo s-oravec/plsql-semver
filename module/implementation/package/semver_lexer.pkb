@@ -1,5 +1,7 @@
 create or replace package body semver_lexer as
 
+    d debug := new debug('semver:lexer');
+
     g_index           pls_integer;
     g_line            pls_integer;
     g_lineIndex       pls_integer;
@@ -159,6 +161,9 @@ create or replace package body semver_lexer as
             end loop;
         end if;
         return l_result;
+    exception
+        when others then
+            d.log('exception>' || sqlerrm);
     end;
 
     ----------------------------------------------------------------------------
@@ -171,6 +176,7 @@ create or replace package body semver_lexer as
             l_result := nextTokenImpl;
         end loop;
         if l_result is null then
+            d.log('Unknown token at ' || g_line || ':' || g_lineIndex || ' "' || substr(g_source, g_index, 10) || ' ..."');
             raise_application_error(-20000,
                                     'Unknown token at ' || g_line || ':' || g_lineIndex || ' "' || substr(g_source, g_index, 10) || ' ..."');
         else
@@ -186,6 +192,7 @@ create or replace package body semver_lexer as
         loop
             l_result.extend;
             l_result(l_result.count) := semver_lexer.nextToken;
+            d.log('token: ' || l_result(l_result.count).text);
             exit when l_result(l_result.count).tokenType = semver_lexer.tk_EOF;
         end loop;
         return l_result;

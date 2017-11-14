@@ -18,15 +18,11 @@ create or replace type body semver_ast_tags as
     end;
 
     ----------------------------------------------------------------------------
-    overriding member function toString
-    (
-        lvl       integer default 0,
-        verbosity integer default 0
-    ) return varchar2 is
+    overriding member function toString return varchar2 is
         l_result varchar2(255);
     begin
         for i in 1 .. self.tags.count loop
-            l_result := l_result || '.' || self.tags(i);
+            l_result := l_result || semver_util.ternary_varchar2(i = 1, self.tags(i), '.' || self.tags(i));
         end loop;
         return l_result;
     end;

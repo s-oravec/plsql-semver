@@ -110,5 +110,13 @@ create or replace package semver as
         identifier in varchar2 default null
     ) return varchar2;
 
+    function satisfies
+    (
+        version in varchar2,
+        range   in varchar2
+    ) return boolean;
+
+    function parse_range(value in varchar2) return varchar2;
+
 end;
 /
