@@ -1,6 +1,9 @@
 prompt .. Creating type body SEMVER_RANGE
 @@type/semver_range.tpb
 
+prompt .. Creating type body SEMVER_RANGE_SET
+@@type/semver_range_set.tpb
+
 prompt .. Creating type body SEMVER_COMPARATOR
 @@type/semver_comparator.tpb
 

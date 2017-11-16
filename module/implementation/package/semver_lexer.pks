@@ -4,7 +4,7 @@ create or replace package semver_lexer as
 
     -- symbols
     tk_hyphen  constant token_type := '-';
-    tk_plus    constant token_type := '=';
+    tk_plus    constant token_type := '+';
     tk_lte     constant token_type := '<=';
     tk_gte     constant token_type := '>=';
     tk_lt      constant token_type := '<';

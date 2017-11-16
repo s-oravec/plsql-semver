@@ -1,6 +1,6 @@
 create or replace package body semver as
 
-    d debug := new debug('semver');
+    -- d debug := new debug('semver');
 
     ----------------------------------------------------------------------------
     function parse(value in varchar2) return semver_version is
@@ -348,27 +348,67 @@ create or replace package body semver as
     ----------------------------------------------------------------------------  
     function satisfies
     (
-        version in varchar2,
-        range   in varchar2
+        version   in varchar2,
+        range_set in varchar2
     ) return boolean is
     begin
-        null;
+        return semver_range_impl.satisfies(parse(version), parse_range(range_set));
     end;
 
     ----------------------------------------------------------------------------
-    function parse_range(value in varchar2) return varchar2 is
+    function intersects
+    (
+        range1 in varchar2,
+        range2 in varchar2
+    ) return boolean is
+        l_range1 semver_range_set;
+        l_range2 semver_range_set;
+    begin
+        l_range1 := parse_range(range1);
+        l_range2 := parse_range(range2);
+        --
+        return semver_range_impl.intersects(l_range1, l_range2);
+    end;
+
+    ----------------------------------------------------------------------------
+    function parse_range(value in varchar2) return semver_range_set is
         l_range_set semver_range_set;
     begin
         l_range_set := semver_range_impl.parse(value);
         if l_range_set is null then
             return null;
         else
-            return l_range_set.to_string();
+            return l_range_set;
         end if;
     exception
         when others then
             return null;
     end;
+
+    ----------------------------------------------------------------------------
+    function valid_range(value in varchar2) return varchar2 is
+        l_range_set semver_range_set;
+    begin
+        l_range_set := parse_range(value);
+        if l_range_set is not null then
+            -- passed value is valid so just trim space and replace \s+ with \s
+            return trim(regexp_replace(value, '\s+', ' '));
+        else
+            return null;
+        end if;
+    end;
+
+----------------------------------------------------------------------------  
+/*    function format_range(value in varchar2) return varchar2 is
+        l_range_set semver_range_set;
+    begin
+        l_range_set := parse_range(value);
+        if l_range_set is not null then
+            return l_range_set.to_string();
+        else
+            return null;
+        end if;
+    end;*/
 
 end;
 /

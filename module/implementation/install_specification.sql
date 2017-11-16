@@ -79,3 +79,5 @@ prompt .. Creating package SEMVER_VERSION_IMPL
 prompt .. Creating package SEMVER_RANGE_IMPL
 @@package/semver_range_impl.pks;
 
+prompt .. Creating package SEMVER_COMPARATOR_IMPL
+@@package/semver_comparator_impl.pks

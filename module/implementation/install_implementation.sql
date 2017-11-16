@@ -57,3 +57,6 @@ prompt .. Creating type body SEMVER_MATCHNUMERIC
 
 prompt .. Creating type body SEMVER_TOKEN
 @@type/semver_token.tpb
+
+prompt .. Creating package body SEMVER_COMPARATOR_IMPL
+@@package/semver_comparator_impl.pkb

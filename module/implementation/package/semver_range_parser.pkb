@@ -4,8 +4,18 @@ create or replace package body semver_range_parser as
 
     ----------------------------------------------------------------------------
     procedure initialize(a_value in varchar2) is
+        l_value varchar2(255);
     begin
-        semver_token_stream.initialize(a_value);
+        d.log('initializing with: "' || a_value || '"');
+        d.log('stripping excesive spaces, ~> -> ~');
+        l_value := regexp_replace(a_value, '(>|>=|<|<=|~|=|\^|~)\s*v?\s*', '\1');
+        l_value := regexp_replace(l_value, '\s+', ' ');
+        l_value := regexp_replace(l_value, '~>', '~');
+        d.log('stripped excesive white space: "' || l_value || '"');
+        semver_token_stream.initialize(l_value);
+    exception
+        when others then
+            d.log('intialize exception: ' || sqlerrm);
     end;
 
     ----------------------------------------------------------------------------  
@@ -53,15 +63,11 @@ create or replace package body semver_range_parser as
     begin
         return semver_token_stream.currentToken().text;
     end;
-    
+
     ----------------------------------------------------------------------------
     function currentTokenInfo return varchar2 is
     begin
-        return semver_util.ternary_varchar2(
-            currentTokenText is null,
-            currentTokenType,
-            currentTokenText
-        );
+        return semver_util.ternary_varchar2(currentTokenText is null, currentTokenType, currentTokenText);
     end;
 
     ----------------------------------------------------------------------------
@@ -156,10 +162,11 @@ create or replace package body semver_range_parser as
     ----------------------------------------------------------------------------  
     function take_tags return semver_ast_tags is
         l_tags semver_tags := new semver_tags();
+    
         procedure takeTag is
         begin
             -- todo: add takeAny to semver_token_stream
-            if currentTokenType in then (semver_lexer.tk_Numeric, semver_lexer.tk_Ascii) 
+            if currentTokenType in (semver_lexer.tk_Numeric, semver_lexer.tk_Ascii) then
                 l_tags.extend();
                 l_tags(l_tags.count) := currentTokenText;
                 d.log('got tag: ' || currentTokenText);
@@ -169,6 +176,7 @@ create or replace package body semver_range_parser as
                 raiseUnexpectedToken;
             end if;
         end;
+    
     begin
         d.log('take tags');
         semver_token_stream.takeSnapshot;
@@ -179,7 +187,7 @@ create or replace package body semver_range_parser as
         -- 2. take other if currentTokenType is tk_Dot  
         while currentTokenType = semver_lexer.tk_Dot loop
             semver_token_stream.consume;
-            t;
+            takeTag;
         end loop;
         --
         semver_token_stream.commitSnapshot;
@@ -262,7 +270,7 @@ create or replace package body semver_range_parser as
     ----------------------------------------------------------------------------  
     function match_simple return semver_ast_comparator is
         -- todo: type
-        l_modifier        varchar2(2);
+        l_operator        varchar2(2);
         l_comparator_type varchar2(30);
     begin
         -- simple ::= primitive | partial | tilde | caret
@@ -270,8 +278,9 @@ create or replace package body semver_range_parser as
         -- caret  ::= '^' partial
         -- primitive  ::= ( '<' | '>' | '>=' | '<=' | '=' | ) partial
         d.log('matching simple');
-        -- 1. match modifier
+        -- 1. match operator
         -- 1.1. if currentTokenType in (tilde, caret, lt, gt, lte, gte, eq)
+        d.log('matching operator');
         if currentTokenType in (semver_lexer.tk_tilde,
                                 semver_lexer.tk_caret,
                                 semver_lexer.tk_lt,
@@ -279,8 +288,8 @@ create or replace package body semver_range_parser as
                                 semver_lexer.tk_lte,
                                 semver_lexer.tk_gte,
                                 semver_lexer.tk_eq) then
-            -- 1.1.1. set modifier = currentTokenText
-            l_modifier := currentTokenText;
+            -- 1.1.1. set operator = currentTokenText
+            l_operator := currentTokenText;
             -- 1.1.2. set comparator type based on currentTokenType
             case currentTokenType
                 when semver_lexer.tk_caret then
@@ -294,13 +303,14 @@ create or replace package body semver_range_parser as
             semver_token_stream.consume;
         else
             -- 1.2. else "silent eq"
-            -- 1.2.1. set modifier = '='
-            l_modifier := '=';
+            -- 1.2.1. set operator = '='
+            l_operator := '';
             -- 1.2.2. set comparator type COMPARATOR_TYPE_PRIMITIVE
             l_comparator_type := COMPARATOR_TYPE_PRIMITIVE;
         end if;
         -- 2. match partial
-        return semver_ast_comparator.createNew(l_comparator_type, l_modifier, match_partial);
+        d.log('match partial');
+        return semver_ast_comparator.createNew(l_comparator_type, l_operator, match_partial);
     end;
 
     ----------------------------------------------------------------------------  
@@ -316,6 +326,7 @@ create or replace package body semver_range_parser as
         l_comparators := semver_AstChildren();
         -- 2.1. match partial
         -- TODO: rewrite this
+        d.log('try match hyphen');
         if appendToList(match_partial, l_comparators) then
             begin
                 -- 2.2. if current token != space 
@@ -346,24 +357,52 @@ create or replace package body semver_range_parser as
             semver_token_stream.rollbackSnapshot;
         end if;
         -- 3. match simple list
+        d.log('try match simple list');
         -- simple ( ' ' simple ) *
-        semver_token_stream.takeSnapshot;
-        l_comparators := semver_AstChildren();
-        -- 3.1. match simple
-        if not appendToList(match_simple, l_comparators) then
-            semver_token_stream.rollbackSnapshot;
-            raiseExpectedSymbolNotFound(ast_Simple);
-        end if;
-        -- 3.2. match list of simple comparators separated by space
-        while currentTokenType = semver_lexer.tk_Space loop
-            semver_token_stream.take(semver_lexer.tk_Space);
+        begin
+            semver_token_stream.takeSnapshot;
+            l_comparators := semver_AstChildren();
+            -- 3.1. match simple
             if not appendToList(match_simple, l_comparators) then
                 semver_token_stream.rollbackSnapshot;
                 raiseExpectedSymbolNotFound(ast_Simple);
             end if;
-        end loop;
-        -- 3.3. return simple-list comparator
-        return semver_ast_range.createNew(RANGE_TYPE_SIMPLE_LIST, l_comparators);
+            -- 3.2. match list of simple comparators separated by space
+            d.log('try match list of simple comparators separated by space');
+            <<matchListOfSimpleComparators>>
+            while currentTokenType = semver_lexer.tk_Space loop
+                semver_token_stream.takeSnapshot;
+                begin
+                    semver_token_stream.take(semver_lexer.tk_Space);
+                    if not appendToList(match_simple, l_comparators) then
+                        semver_token_stream.rollbackSnapshot;
+                        raiseExpectedSymbolNotFound(ast_Simple);
+                    end if;
+                exception
+                    when others then
+                        semver_token_stream.rollbackSnapshot;
+                        exit matchListOfSimpleComparators;
+                end;
+            end loop matchListOfSimpleComparators;
+            -- 3.3. return simple-list comparator
+            return semver_ast_range.createNew(RANGE_TYPE_SIMPLE_LIST, l_comparators);
+        exception
+            when others then
+                semver_token_stream.rollbackSnapshot;
+        end;
+        -- not match > create empty range if next is EOF, WhiteSpace or |
+        if currentTokenType in (semver_lexer.tk_EOF, semver_lexer.tk_WhiteSpace, semver_lexer.tk_Pipe) then
+            d.log('create ANY range');
+            declare
+                l_any_comparator semver_ast_comparator;
+            begin
+                l_any_comparator := semver_ast_comparator.createNew(semver_range_parser.COMPARATOR_TYPE_PRIMITIVE,
+                                                                    '=',
+                                                                    semver_ast_partial('*', null, null));
+                return semver_ast_range.createNew(semver_range_parser.RANGE_TYPE_SIMPLE_LIST,
+                                                  semver_astchildren(l_any_comparator.id_registry));
+            end;
+        end if;
     end;
 
     ----------------------------------------------------------------------------  
@@ -372,15 +411,17 @@ create or replace package body semver_range_parser as
     begin
         --
         d.log('matching range_set');
-        -- range-set ::= range ( logical-or range ) *
+        -- range-set ::= range ( logical-or range ) *        
         -- range
         semver_token_stream.takeSnapshot;
+        d.log('try match range');
         if not appendToList(match_range, l_ranges) then
             semver_token_stream.rollbackSnapshot;
             raiseExpectedSymbolNotFound(ast_Range);
         end if;
         -- ( logical-or range ) *
         -- ( ' ' ) * '||' ( ' ' ) *
+        d.log('eating spaces');
         eatSpaces;
         while currentTokenType != semver_lexer.tk_EOF loop
             d.log('matching || operator');
@@ -405,7 +446,7 @@ create or replace package body semver_range_parser as
         --
     end;
 
-    ----------------------------------------------------------------------------
+    -------------------------------------------
     function parse return semver_ast_rangeset is
     begin
         d.log('begin parsing');

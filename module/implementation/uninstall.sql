@@ -79,3 +79,6 @@ drop package semver_version_impl;
 prompt .. Dropping package SEMVER_RANGE_IMPL
 drop package semver_range_impl;
 
+prompt .. Dropping package SEMVER_COMPARATOR_IMPL
+drop package semver_comparator_impl;
+

@@ -6,8 +6,21 @@ create or replace type body semver_comparator as
         if self.version is not null then
             return self.operator || self.version.to_string();
         else
-            return self.operator;
+            -- semver.ANY = semver_comparator(null, null)
+            return null;
         end if;
+    end;
+
+    ----------------------------------------------------------------------------
+    member function test(version in semver_version) return boolean is
+    begin
+        return semver_comparator_impl.test(self, version);
+    end;
+
+    ----------------------------------------------------------------------------
+    member function intersects(comparator in semver_comparator) return boolean is
+    begin
+        return semver_comparator_impl.intersects(self, comparator);
     end;
 
 end;

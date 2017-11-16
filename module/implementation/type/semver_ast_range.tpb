@@ -71,7 +71,7 @@ create or replace type body semver_ast_range as
             d.log('translating lower');
             p := treat(semver_ast_registry.get_by_id(self.children(1)) as semver_ast_partial);
             if isX(p.major) then
-                d.log('minor is *');
+                d.log('major is *');
                 appendComparator(semver_comparator('*', null));
             elsif isX(p.minor) then
                 d.log('minor is *');

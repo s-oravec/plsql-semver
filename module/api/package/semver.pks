@@ -15,6 +15,8 @@ create or replace package semver as
     -- parse
     function parse(value in varchar2) return semver_version;
 
+    COMPARATOR_ANY constant semver_comparator := new semver_comparator(null, null);
+
     -- diff
     function diff
     (
@@ -110,13 +112,25 @@ create or replace package semver as
         identifier in varchar2 default null
     ) return varchar2;
 
+    ----------------------------------------------------------------------------  
+    -- range methods
+    ----------------------------------------------------------------------------  
+
+    function parse_range(value in varchar2) return semver_range_set;
+
+    function valid_range(value in varchar2) return varchar2;
+
     function satisfies
     (
-        version in varchar2,
-        range   in varchar2
+        version   in varchar2,
+        range_set in varchar2
     ) return boolean;
 
-    function parse_range(value in varchar2) return varchar2;
+    function intersects
+    (
+        range1 in varchar2,
+        range2 in varchar2
+    ) return boolean;
 
 end;
 /

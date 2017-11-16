@@ -1,5 +1,5 @@
 prompt .. Creating test package ut_semver
-test/api/ut_semver.pkg
+@@api/ut_semver.pkg
 
-prompt .. Creating test package ut_semver_cmp_fns
-test/api/ut_semver_cmp_fns.pkg
+prompt .. Creating test package ut_semver_cmp_functions
+@@api/ut_semver_cmp_functions.pkg

@@ -2,3 +2,4 @@
 .idea/
 *.~*
 oradb_modules/
+/local_*.sql

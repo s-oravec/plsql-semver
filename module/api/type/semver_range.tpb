@@ -11,5 +11,11 @@ create or replace type body semver_range as
         return l_result;
     end;
 
+    ----------------------------------------------------------------------------
+    member function test(version in semver_version) return boolean is
+    begin
+        return semver_range_impl.test(self, version);
+    end;
+
 end;
 /

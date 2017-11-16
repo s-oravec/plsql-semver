@@ -5,6 +5,7 @@ create or replace package ut_semver_cmp_fns as
     procedure comparison(d varchar2 := 'version1 should be greater than version2');
     procedure equivalence(d varchar2 := 'version1 should be equivalent to version2');
     procedure range_tests_include(d varchar2 := 'range tests - version should be included by range');
+    procedure negative_range_tests(d varchar2 := 'version should not be included by range');
 
 end;
 /
@@ -100,7 +101,6 @@ create or replace package body ut_semver_cmp_fns as
             exception
                 when others then
                     l_failed := true;
-                    raise;
             end;
         end loop;
         if l_failed then
@@ -171,7 +171,6 @@ create or replace package body ut_semver_cmp_fns as
             exception
                 when others then
                     l_failed := true;
-                    raise;
             end;
         end loop;
         if l_failed then
@@ -290,24 +289,120 @@ create or replace package body ut_semver_cmp_fns as
         -- NoFormat End
     begin
         pete.set_method_description(d);
---        for i in 1 .. samples.count loop
---            begin
---                -- NoFormat Start
---                pete_assert.this(
---                    semver.satisfies(samples(i).version, samples(i).range),
---                    'range "' || samples(i).range ||'" satisfied by "' || samples(i).version ||'"'
---                );
---                -- NoFormat End
---            exception
---                when others then
---                    l_failed := true;
---                    raise;
---            end;
---        end loop;
---        if l_failed then
---            pete_assert.fail('failed');
---        end if;
-        pete_assert.fail('not implemented');
+        for i in 1 .. samples.count loop
+            begin
+                 -- NoFormat Start
+                  pete_assert.this(
+                      semver.satisfies(samples(i).version, samples(i).range),
+                      'range "' || samples(i).range ||'" satisfied by "' || samples(i).version ||'"'
+                  );
+                -- NoFormat End
+            exception
+                when others then
+                    l_failed := true;
+                    dbms_output.put_line('range "' || samples(i).range ||'" satisfied by "' || samples(i).version ||'"' || chr(10) || 'sqlerrm: ' || sqlerrm);
+            end;
+        end loop;
+        if l_failed then
+            pete_assert.fail('failed');
+        end if;
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure negative_range_tests(d varchar2) is
+        l_failed boolean := false;
+        -- NoFormat Start
+        samples range_version_samples := range_version_samples(
+            rvs('1.0.0 - 2.0.0', '2.2.3'),
+            rvs('1.2.3+asdf - 2.4.3+asdf', '1.2.3-pre.2'),
+            rvs('1.2.3+asdf - 2.4.3+asdf', '2.4.3-alpha'),
+            rvs('^1.2.3+build', '2.0.0'),
+            rvs('^1.2.3+build', '1.2.0'),
+            rvs('^1.2.3', '1.2.3-pre'),
+            rvs('^1.2', '1.2.0-pre'),
+            rvs('>1.2', '1.3.0-beta'),
+            rvs('<=1.2.3', '1.2.3-beta'),
+            rvs('^1.2.3', '1.2.3-beta'),
+            rvs('=0.7.x', '0.7.0-asdf'),
+            rvs('>=0.7.x', '0.7.0-asdf'),
+            --rvs('1', '1.0.0beta', true),
+            --rvs('<1', '1.0.0beta', true),
+            --rvs('< 1', '1.0.0beta', true),
+            rvs('1.0.0', '1.0.1'),
+            rvs('>=1.0.0', '0.0.0'),
+            rvs('>=1.0.0', '0.0.1'),
+            rvs('>=1.0.0', '0.1.0'),
+            rvs('>1.0.0', '0.0.1'),
+            rvs('>1.0.0', '0.1.0'),
+            rvs('<=2.0.0', '3.0.0'),
+            rvs('<=2.0.0', '2.9999.9999'),
+            rvs('<=2.0.0', '2.2.9'),
+            rvs('<2.0.0', '2.9999.9999'),
+            rvs('<2.0.0', '2.2.9'),
+            -- requires loose implementation rvs('>=0.1.97', 'v0.1.93', true),
+            rvs('>=0.1.97', '0.1.93'),
+            rvs('0.1.20 || 1.2.4', '1.2.3'),
+            rvs('>=0.2.3 || <0.0.1', '0.0.3'),
+            rvs('>=0.2.3 || <0.0.1', '0.2.2'),
+            rvs('2.x.x', '1.1.3'),
+            rvs('2.x.x', '3.1.3'),
+            rvs('1.2.x', '1.3.3'),
+            rvs('1.2.x || 2.x', '3.1.3'),
+            rvs('1.2.x || 2.x', '1.1.3'),
+            rvs('2.*.*', '1.1.3'),
+            rvs('2.*.*', '3.1.3'),
+            rvs('1.2.*', '1.3.3'),
+            rvs('1.2.* || 2.*', '3.1.3'),
+            rvs('1.2.* || 2.*', '1.1.3'),
+            rvs('2', '1.1.2'),
+            rvs('2.3', '2.4.1'),
+            rvs('~2.4', '2.5.0'), -- >=2.4.0 <2.5.0
+            rvs('~2.4', '2.3.9'),
+            rvs('~>3.2.1', '3.3.2'), -- >=3.2.1 <3.3.0
+            rvs('~>3.2.1', '3.2.0'), -- >=3.2.1 <3.3.0
+            rvs('~1', '0.2.3'), -- >=1.0.0 <2.0.0
+            rvs('~>1', '2.2.3'),
+            rvs('~1.0', '1.1.0'), -- >=1.0.0 <1.1.0
+            rvs('<1', '1.0.0'),
+            rvs('>=1.2', '1.1.1'),
+            -- requires loose implementation rvs('1', '2.0.0beta', true),
+            rvs('~v0.5.4-beta', '0.5.4-alpha'),
+            rvs('=0.7.x', '0.8.2'),
+            rvs('>=0.7.x', '0.6.2'),
+            rvs('<0.7.x', '0.7.2'),
+            rvs('<1.2.3', '1.2.3-beta'),
+            rvs('=1.2.3', '1.2.3-beta'),
+            rvs('>1.2', '1.2.8'),
+            rvs('^0.0.1', '0.0.2'),
+            rvs('^1.2.3', '2.0.0-alpha'),
+            rvs('^1.2.3', '1.2.2'),
+            rvs('^1.2', '1.1.9'),
+            -- requires loose implementation rvs('*', 'v1.2.3-foo', true),
+            -- invalid ranges never satisfied!
+            rvs('blerg', '1.2.3'),
+            -- requires loose implementation rvs('git+https://user:password0123@github.com/foo', '123.0.0', true),
+            rvs('^1.2.3', '2.0.0-pre'),
+            rvs('^1.2.3', 'false')
+        );
+        -- NoFormat End
+    begin
+        pete.set_method_description(d);
+        for i in 1 .. samples.count loop
+            begin
+                 -- NoFormat Start
+                  pete_assert.this(
+                      not semver.satisfies(samples(i).version, samples(i).range),
+                      'range "' || samples(i).range ||'" not satisfied by "' || samples(i).version ||'"'
+                  );
+                -- NoFormat End
+            exception
+                when others then
+                    l_failed := true;
+            end;
+        end loop;
+        if l_failed then
+            pete_assert.fail('failed');
+        end if;
     end;
 
 end;

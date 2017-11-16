@@ -24,6 +24,10 @@ create or replace package body semver_token_stream as
         g_tokens          := semver_lexer.tokens;
         g_index           := 1;
         g_snapshotIndexes := semver_integer_stack();
+    exception
+        when others then
+            d.log('initialize exception: ' || sqlerrm);
+            raise;
     end;
 
     ----------------------------------------------------------------------------
