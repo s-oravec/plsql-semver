@@ -24,3 +24,7 @@ drop synonym semver_tags;
 
 prompt .. Dropping synonym semver_version
 drop synonym semver_version;
+
+prompt .. Dropping synonym semver_versions
+drop synonym semver_versions;
+

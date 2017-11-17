@@ -100,5 +100,20 @@ create or replace package semver_range_impl as
         a_other in semver_range_set
     ) return boolean;
 
+    subtype aggregate_function_type is varchar2(3);
+    FN_MAX constant aggregate_function_type := 'max';
+    FN_MIN constant aggregate_function_type := 'min';
+    /** 
+    
+    min/max version satisfying range
+    
+    */
+    function satisfying
+    (
+        a_versions           in semver_versions,
+        a_range_set          in semver_range_set,
+        a_aggregate_function in aggregate_function_type
+    ) return semver_version;
+
 end;
 /

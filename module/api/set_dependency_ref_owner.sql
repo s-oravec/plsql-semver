@@ -24,3 +24,6 @@ create synonym semver_tags for &&g_schema_name..semver_tags;
 
 prompt .. Creating synonym semver_version for &&g_schema_name..semver_version
 create synonym semver_version for &&g_schema_name..semver_version;
+
+prompt .. Creating synonym semver_versions for &&g_schema_name..semver_versions
+create synonym semver_versions for &&g_schema_name..semver_versions;

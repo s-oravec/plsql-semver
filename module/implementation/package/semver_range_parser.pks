@@ -19,7 +19,7 @@ create or replace package semver_range_parser as
     COMPARATOR_TYPE_TILDE     constant varchar2(30) := 'tilde';
     COMPARATOR_TYPE_CARET     constant varchar2(30) := 'caret';
     COMPARATOR_TYPE_PRIMITIVE constant varchar2(30) := 'primitive';
-    
+
     -- initializes parser with source
     procedure initialize(a_value in varchar2);
 

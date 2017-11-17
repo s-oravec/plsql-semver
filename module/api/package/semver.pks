@@ -4,18 +4,33 @@ create or replace package semver as
     -- Not necessarily the package version of this code.
     SEMVER_SPEC_VERSION constant varchar2(10) := '2.0.0';
 
+    MAX_SAFE_INTEGER constant integer := 9007199254740991;
+    MAX_LENGTH       constant pls_integer := 256;
+
     subtype compare_result_type is pls_integer range - 1 .. 1;
     COMPARE_RESULT_LT constant compare_result_type := -1;
     COMPARE_RESULT_EQ constant compare_result_type := 0;
     COMPARE_RESULT_GT constant compare_result_type := 1;
 
     type semver_version_table_type is table of semver_version;
-    type semver_string_table_type is table of varchar2(255);
+    type semver_string_table_type is table of varchar2(256);
 
     -- parse
     function parse(value in varchar2) return semver_version;
 
     COMPARATOR_ANY constant semver_comparator := new semver_comparator(null, null);
+
+    subtype exception_sqlerrm_type is varchar2(255);
+
+    INVALID_VERSION_SQLCODE constant pls_integer := -20001;
+    INVALID_VERSION_SQLERRM constant exception_sqlerrm_type := 'Invalid Version "$1"';
+    invalid_version_error exception;
+    pragma exception_init(invalid_version_error, -20001);
+
+    VERSION_TOO_LONG_SQLCODE constant pls_integer := -20002;
+    VERSION_TOO_LONG_SQLERRM constant exception_sqlerrm_type := 'Version is longer than $1 characters';
+    version_too_long_error exception;
+    pragma exception_init(version_too_long_error, -20002);
 
     -- diff
     function diff
@@ -131,6 +146,18 @@ create or replace package semver as
         range1 in varchar2,
         range2 in varchar2
     ) return boolean;
+
+    function max_satisfying
+    (
+        versions  in semver_string_table_type,
+        range_set in varchar2
+    ) return varchar2;
+
+    function min_satisfying
+    (
+        versions  in semver_string_table_type,
+        range_set in varchar2
+    ) return varchar2;
 
 end;
 /

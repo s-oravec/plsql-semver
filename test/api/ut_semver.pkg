@@ -2,12 +2,16 @@ create or replace package ut_semver as
 
     description constant pete_types.typ_description := 'semver';
 
-    procedure major(d varchar2 := 'major version should be detectable despite extra characters');
-    procedure minor(d varchar2 := 'minor version should be detectable despite extra characters');
-    procedure patch(d varchar2 := 'patch version should be detectable despite extra characters');
-
-    procedure prerelease(d varchar2 := 'prerelease tags are parsed correctly');
-    procedure build(d varchar2 := 'build tags are parsed correctly');
+    procedure comparison(d varchar2 := 'greater version is greater');
+    procedure equivalence(d varchar2 := 'equal version is equal');
+    procedure range_tests_include(d varchar2 := 'version should be included by range');
+    procedure negative_range_tests(d varchar2 := 'version should not be included by range');
+    procedure increment_versions_test(d varchar2 := 'increment version should increment');
+    procedure diff_versions_test(d varchar2 := 'diff versions should diff');
+    procedure valid_range_tests(d varchar2 := 'translate range to canonical form translates');
+    procedure range_to_comparators_test(d varchar2 := 'range is correctly translated to comparators');
+    procedure max_satisfying(d varchar2 := 'max satisfying');
+    procedure min_satisfying(d varchar2 := 'min satisfying');
 
 end;
 /
@@ -15,168 +19,950 @@ create or replace package body ut_semver as
 
     d debug := new debug('semver:test:semver');
 
-    type version_test_sample is record(
-        test     varchar2(255),
-        expected integer);
-    type version_test_samples is table of version_test_sample;
+    type version_pair_sample is record(
+        v1    varchar2(256),
+        v2    varchar2(256),
+        loose boolean);
+    type version_pair_samples is table of version_pair_sample;
 
-    type tags_test_sample is record(
-        test     varchar2(255),
-        expected semver_tags);
-    type tags_test_samples is table of tags_test_sample;
+    type range_version_sample is record(
+        range   varchar2(256),
+        version varchar2(256),
+        loose   boolean);
+    type range_version_samples is table of range_version_sample;
+
+    type version_inc_sample is record(
+        pre    varchar2(256),
+        what   varchar2(256),
+        result varchar2(256),
+        loose  boolean,
+        id     varchar2(256));
+    type version_inc_samples is table of version_inc_sample;
+
+    type version_diff_sample is record(
+        v1     varchar2(256),
+        v2     varchar2(256),
+        result varchar2(256));
+    type version_diff_samples is table of version_diff_sample;
+
+    type value_result_sample is record(
+        value  varchar2(256),
+        result varchar2(256),
+        loose  boolean);
+    type value_result_samples is table of value_result_sample;
+
+    type ct is table of varchar2(256);
+    type rt is table of ct;
+    type range_comparators_sample is record(
+        range  varchar2(256),
+        ranges rt);
+    type range_comparators_samples is table of range_comparators_sample;
+
+    type satisfying_sample is record(
+        versions semver.semver_string_table_type,
+        range    varchar2(256),
+        result   varchar2(256),
+        loose    boolean);
+    type satisfying_samples is table of satisfying_sample;
 
     ----------------------------------------------------------------------------  
-    function tts
+    ----------------------------------------------------------------------------
+    function vps
     (
-        test     varchar2,
-        expected semver_tags
-    ) return tags_test_sample is
-        l_result tags_test_sample;
+        v1    varchar2,
+        v2    varchar2,
+        loose boolean default false
+    ) return version_pair_sample is
+        l_result version_pair_sample;
     begin
-        l_result.test     := test;
-        l_result.expected := expected;
+        l_result.v1    := v1;
+        l_result.v2    := v2;
+        l_result.loose := loose;
         return l_result;
     end;
 
     ----------------------------------------------------------------------------
-    function vts
+    function rvs
     (
-        test     varchar2,
-        expected integer
-    ) return version_test_sample is
-        l_result version_test_sample;
+        range   varchar2,
+        version varchar2,
+        loose   boolean default false
+    ) return range_version_sample is
+        l_result range_version_sample;
     begin
-        l_result.test     := test;
-        l_result.expected := expected;
+        l_result.range   := range;
+        l_result.version := version;
+        l_result.loose   := loose;
         return l_result;
     end;
 
     ----------------------------------------------------------------------------
-    procedure major(d varchar2) is
-        l_failed boolean := false;
-        -- NoFormat Start
-        samples version_test_samples := version_test_samples (
-            vts('1.2.3', 1),
-            vts(' 1.2.3 ', 1),
-            vts(' 2.2.3-4 ', 2),
-            vts(' 3.2.3-pre ', 3),
-            vts('v5.2.3', 5),
-            vts(' v8.2.3 ', 8),
-            vts(chr(9) || '13.2.3', 13)
-        );
-        -- NoFormat End
+    function vis
+    (
+        pre    varchar2,
+        what   varchar2,
+        result varchar2,
+        loose  boolean default null,
+        id     varchar2 default null
+    ) return version_inc_sample is
+        l_result version_inc_sample;
     begin
-        pete.set_method_description(d);
-        for i in 1 .. samples.count loop
-            begin
-                pete_assert.eq(samples(i).expected,
-                               semver.major(samples(i).test),
-                               'semver.major(''' || samples(i).test || ''') should be ' || samples(i).expected);
-            exception
-                when others then
-                    l_failed := true;
-            end;
-        end loop;
-        if l_failed then
-            pete_assert.fail('failed');
-        end if;
+        l_result.pre    := pre;
+        l_result.what   := what;
+        l_result.result := result;
+        l_result.loose  := loose;
+        l_result.id     := id;
+        return l_result;
     end;
 
     ----------------------------------------------------------------------------
-    procedure minor(d varchar2) is
-        l_failed boolean := false;
-        -- NoFormat Start
-        samples version_test_samples := version_test_samples (
-            vts('1.1.3', 1),
-            vts(' 1.1.3 ', 1),
-            vts(' 1.2.3-4 ', 2),
-            vts(' 1.3.3-pre ', 3),
-            vts('v1.5.3', 5),
-            vts(' v1.8.3 ', 8),
-            vts(chr(9) || '1.13.3', 13)
-        );
-        -- NoFormat End
+    function vds
+    (
+        v1     varchar2,
+        v2     varchar2,
+        result varchar2
+    ) return version_diff_sample is
+        l_result version_diff_sample;
     begin
-        pete.set_method_description(d);
-        for i in 1 .. samples.count loop
-            begin
-                pete_assert.eq(samples(i).expected,
-                               semver.minor(samples(i).test),
-                               'semver.minor(''' || samples(i).test || ''') should be ' || samples(i).expected);
-            exception
-                when others then
-                    l_failed := true;
-            end;
-        end loop;
-        if l_failed then
-            pete_assert.fail('failed');
-        end if;
+        l_result.v1     := v1;
+        l_result.v2     := v2;
+        l_result.result := result;
+        return l_result;
     end;
 
     ----------------------------------------------------------------------------
-    procedure patch(d varchar2) is
+    function vrs
+    (
+        value  varchar2,
+        result varchar2,
+        loose  boolean default null
+    ) return value_result_sample is
+        l_result value_result_sample;
+    begin
+        l_result.value  := value;
+        l_result.result := result;
+        l_result.loose  := loose;
+        return l_result;
+    end;
+
+    ----------------------------------------------------------------------------
+    function rcs
+    (
+        range  varchar2,
+        ranges rt
+    ) return range_comparators_sample is
+        l_result range_comparators_sample;
+    begin
+        l_result.range  := range;
+        l_result.ranges := ranges;
+        return l_result;
+    end;
+
+    function rcs_to_string(value in range_comparators_sample) return varchar2 is
+        l_ranges      varchar2(1024);
+        l_comparators varchar2(1024);
+    begin
+        for i in 1 .. value.ranges.count loop
+            l_comparators := '';
+            for j in 1 .. value.ranges(i).count loop
+                l_comparators := l_comparators || semver_util.ternary_varchar2(j = 1,
+                                                                               '''' || value.ranges(i) (j) || '''',
+                                                                               ', ''' || value.ranges(i) (j) || '''');
+            end loop;
+        
+            l_ranges := l_ranges || semver_util.ternary_varchar2(i = 1, '(' || l_comparators || ')', ', (' || l_comparators || ')');
+        end loop;
+        return '(' || l_ranges || ')';
+    end;
+
+    ----------------------------------------------------------------------------  
+    function svs
+    (
+        versions semver.semver_string_table_type,
+        range    varchar2,
+        result   varchar2,
+        loose    boolean default null
+    ) return satisfying_sample is
+        l_result satisfying_sample;
+    begin
+        l_result.versions := versions;
+        l_result.range    := range;
+        l_result.result   := result;
+        l_result.loose    := loose;
+        return l_result;
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure comparison(d varchar2) is
         l_failed boolean := false;
         -- NoFormat Start
-        samples version_test_samples := version_test_samples (
-            vts('1.2.1', 1),
-            vts(' 1.2.1 ', 1),
-            vts(' 1.2.2-4 ', 2),
-            vts(' 1.2.3-pre ', 3),
-            vts('v1.2.5', 5),
-            vts(' v1.2.8 ', 8),
-            vts(chr(9) || '1.2.13', 13)
+        samples version_pair_samples := version_pair_samples(
+            vps('0.0.0', '0.0.0-foo'),
+            vps('0.0.1', '0.0.0'),
+            vps('1.0.0', '0.9.9'),
+            vps('0.10.0', '0.9.0'),
+            vps('0.99.0', '0.10.0'),
+            vps('2.0.0', '1.2.3'),            
+            vps('1.2.3', '1.2.3-asdf'),
+            vps('1.2.3', '1.2.3-4'),
+            vps('1.2.3', '1.2.3-4-foo'),
+            vps('1.2.3-5-foo', '1.2.3-5'),
+            vps('1.2.3-5', '1.2.3-4'),
+            vps('1.2.3-5-foo', '1.2.3-5-Foo'),
+            vps('3.0.0', '2.7.2+asdf'),
+            vps('1.2.3-a.10', '1.2.3-a.5'),
+            vps('1.2.3-a.b', '1.2.3-a.5'),
+            vps('1.2.3-a.b', '1.2.3-a'),
+            vps('1.2.3-a.b.c.10.d.5', '1.2.3-a.b.c.5.d.100'),
+            vps('1.2.3-r2', '1.2.3-r100'),
+            vps('1.2.3-r100', '1.2.3-R2')
         );
         -- NoFormat End
     begin
         pete.set_method_description(d);
         for i in 1 .. samples.count loop
             begin
-                pete_assert.eq(samples(i).expected,
-                               semver.patch(samples(i).test),
-                               'semver.patch(''' || samples(i).test || ''') should be ' || samples(i).expected);
+                -- NoFormat Start
+                pete_assert.this(semver.gt(samples(i).v1, samples(i).v2), 'gt("' || samples(i).v1 || '", "' || samples(i).v2 || '")');
+                pete_assert.this(semver.lt(samples(i).v2, samples(i).v1), 'lt("' || samples(i).v2 || '", "' || samples(i).v1 || '")');
+                pete_assert.this(not semver.gt(samples(i).v2, samples(i).v1), 'not gt("' || samples(i).v2 || '", "' || samples(i).v1 || '")');
+                pete_assert.this(not semver.lt(samples(i).v1, samples(i).v2), 'not lt("' || samples(i).v1 || '", "' || samples(i).v2 || '")');
+                pete_assert.this(semver.eq(samples(i).v1, samples(i).v1), 'eq("' || samples(i).v1 || '", "' || samples(i).v1 || '")');
+                pete_assert.this(semver.eq(samples(i).v2, samples(i).v2), 'eq("' || samples(i).v2 || '", "' || samples(i).v2 || '")');
+                pete_assert.this(semver.neq(samples(i).v1, samples(i).v2), 'neq("' || samples(i).v1 || '", "' || samples(i).v2 || '")');
+                pete_assert.this(semver.cmp(samples(i).v2, '=', samples(i).v2), 'cmp("' || samples(i).v2 || '" = "' || samples(i).v2 || '")');
+                pete_assert.this(semver.cmp(samples(i).v1, '>=', samples(i).v2), 'cmp("' || samples(i).v1 || '" >= "' || samples(i).v2 || '")');
+                pete_assert.this(semver.cmp(samples(i).v2, '<=', samples(i).v1), 'cmp("' || samples(i).v2 || '" <= "' || samples(i).v1 || '")');
+                pete_assert.this(semver.cmp(samples(i).v1, '!=', samples(i).v2), 'cmp("' || samples(i).v1 || '" != "' || samples(i).v2 || '")');
+                -- NoFormat End
             exception
                 when others then
                     l_failed := true;
             end;
         end loop;
-        if l_failed then
-            pete_assert.fail('failed');
-        end if;
+        pete_assert.this(not l_failed, 'not failed');
     end;
 
-    ----------------------------------------------------------------------------      
-    procedure prerelease(d varchar2) is
+    ----------------------------------------------------------------------------
+    procedure equivalence(d varchar2) is
         l_failed boolean := false;
-        l_tags   semver_tags;
         -- NoFormat Start
-        samples tags_test_samples := tags_test_samples(
-            tts('1.2.2-alpha.1', semver_tags('alpha', 1)),
-            tts('0.6.1-1', semver_tags('1')),
-            tts('1.0.0-beta.2', semver_tags('beta','2')),
-            tts('v0.5.4-pre', semver_tags('pre')),
-            tts('1.2.2-alpha.1', semver_tags('alpha','1')),
-            tts('~2.0.0-alpha.1', null),
-            tts('invalid version', null)
+        samples version_pair_samples := version_pair_samples(
+            vps('1.2.3', 'v1.2.3', true),
+            vps('1.2.3', '=1.2.3', true),
+            vps('1.2.3', 'v 1.2.3', true),
+            vps('1.2.3', '= 1.2.3', true),
+            vps('1.2.3', ' v1.2.3', true),
+            vps('1.2.3', ' =1.2.3', true),
+            vps('1.2.3', ' v 1.2.3', true),
+            vps('1.2.3', ' = 1.2.3', true),
+            vps('1.2.3-0', 'v1.2.3-0', true),
+            vps('1.2.3-0', '=1.2.3-0', true),
+            vps('1.2.3-0', 'v 1.2.3-0', true),
+            vps('1.2.3-0', '= 1.2.3-0', true),
+            vps('1.2.3-0', ' v1.2.3-0', true),
+            vps('1.2.3-0', ' =1.2.3-0', true),
+            vps('1.2.3-0', ' v 1.2.3-0', true),
+            vps('1.2.3-0', ' = 1.2.3-0', true),
+            vps('1.2.3-1', 'v1.2.3-1', true),
+            vps('1.2.3-1', '=1.2.3-1', true),
+            vps('1.2.3-1', 'v 1.2.3-1', true),
+            vps('1.2.3-1', '= 1.2.3-1', true),
+            vps('1.2.3-1', ' v1.2.3-1', true),
+            vps('1.2.3-1', ' =1.2.3-1', true),
+            vps('1.2.3-1', ' v 1.2.3-1', true),
+            vps('1.2.3-1', ' = 1.2.3-1', true),
+            vps('1.2.3-beta', 'v1.2.3-beta', true),
+            vps('1.2.3-beta', '=1.2.3-beta', true),
+            vps('1.2.3-beta', 'v 1.2.3-beta', true),
+            vps('1.2.3-beta', '= 1.2.3-beta', true),
+            vps('1.2.3-beta', ' v1.2.3-beta', true),
+            vps('1.2.3-beta', ' =1.2.3-beta', true),
+            vps('1.2.3-beta', ' v 1.2.3-beta', true),
+            vps('1.2.3-beta', ' = 1.2.3-beta', true),
+            vps('1.2.3-beta+build', ' = 1.2.3-beta+otherbuild', true),
+            vps('1.2.3+build', ' = 1.2.3+otherbuild', true),
+            vps('1.2.3-beta+build', '1.2.3-beta+otherbuild'),
+            vps('1.2.3+build', '1.2.3+otherbuild'),
+            vps('  v1.2.3+build', '1.2.3+otherbuild')
         );
         -- NoFormat End
     begin
         pete.set_method_description(d);
         for i in 1 .. samples.count loop
             begin
-                l_tags := semver.prerelease(samples(i).test);
-                if samples(i).expected is null then
-                    if l_tags is not null then
-                        pete_assert.is_null('prerelease tags', 'semver.prerelease(''' || samples(i).test || ''') should be null');
-                    end if;
+                -- NoFormat Start
+                -- ==, ===, !=== not supported
+                pete_assert.this(semver.eq(samples(i).v1, samples(i).v2),'eq("' || samples(i).v1 ||'", "' || samples(i).v2 ||'")');
+                pete_assert.this(not semver.neq(samples(i).v1, samples(i).v2),'not neq("' || samples(i).v1 ||'", "' || samples(i).v2 ||'")');
+                pete_assert.this(not semver.cmp(samples(i).v1, '!=', samples(i).v2), 'not cmp("' || samples(i).v1 || '"!="' || samples(i).v2 || '")');
+                pete_assert.this(not semver.gt(samples(i).v1, samples(i).v2),'not gt("' || samples(i).v1 ||'", "' || samples(i).v2 ||'")');
+                pete_assert.this(semver.gte(samples(i).v1, samples(i).v2),'gte("' || samples(i).v1 ||'", "' || samples(i).v2 ||'")');
+                pete_assert.this(not semver.lt(samples(i).v1, samples(i).v2),'not lt("' || samples(i).v1 ||'", "' || samples(i).v2 ||'")');
+                pete_assert.this(semver.lte(samples(i).v1, samples(i).v2),'lte("' || samples(i).v1 ||'", "' || samples(i).v2 ||'")');
+                -- NoFormat End
+            exception
+                when others then
+                    l_failed := true;
+            end;
+        end loop;
+        pete_assert.this(not l_failed, 'not failed');
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure range_tests_include(d varchar2) is
+        l_failed boolean := false;
+        -- NoFormat Start
+        samples range_version_samples := range_version_samples(
+            rvs('1.0.0 - 2.0.0', '1.2.3'),
+            rvs('^1.2.3+build', '1.2.3'),
+            rvs('^1.2.3+build', '1.3.0'),
+            rvs('1.2.3-pre+asdf - 2.4.3-pre+asdf', '1.2.3'),
+            -- requires loose implementation rvs('1.2.3pre+asdf - 2.4.3-pre+asdf', '1.2.3', true),
+            -- requires loose implementation rvs('1.2.3-pre+asdf - 2.4.3pre+asdf', '1.2.3', true),
+            -- requires loose implementation rvs('1.2.3pre+asdf - 2.4.3pre+asdf', '1.2.3', true),
+            rvs('1.2.3-pre+asdf - 2.4.3-pre+asdf', '1.2.3-pre.2'),
+            rvs('1.2.3-pre+asdf - 2.4.3-pre+asdf', '2.4.3-alpha'),
+            rvs('1.2.3+asdf - 2.4.3+asdf', '1.2.3'),
+            rvs('1.0.0', '1.0.0'),
+            rvs('>=*', '0.2.4'),
+            rvs('', '1.0.0'),
+            rvs('*', '1.2.3'),
+            -- requires loose implementation rvs('*', 'v1.2.3', true),
+            rvs('>=1.0.0', '1.0.0'),
+            rvs('>=1.0.0', '1.0.1'),
+            rvs('>=1.0.0', '1.1.0'),
+            rvs('>1.0.0', '1.0.1'),
+            rvs('>1.0.0', '1.1.0'),
+            rvs('<=2.0.0', '2.0.0'),
+            rvs('<=2.0.0', '1.9999.9999'),
+            rvs('<=2.0.0', '0.2.9'),
+            rvs('<2.0.0', '1.9999.9999'),
+            rvs('<2.0.0', '0.2.9'),
+            rvs('>= 1.0.0', '1.0.0'),
+            rvs('>=  1.0.0', '1.0.1'),
+            rvs('>=   1.0.0', '1.1.0'),
+            rvs('> 1.0.0', '1.0.1'),
+            rvs('>  1.0.0', '1.1.0'),
+            rvs('<=   2.0.0', '2.0.0'),
+            rvs('<= 2.0.0', '1.9999.9999'),
+            rvs('<=  2.0.0', '0.2.9'),
+            rvs('<    2.0.0', '1.9999.9999'),
+            rvs('<\t2.0.0', '0.2.9'),
+            -- requires loose implementation rvs('>=0.1.97', 'v0.1.97', true),
+            rvs('>=0.1.97', '0.1.97'),
+            rvs('0.1.20 || 1.2.4', '1.2.4'),
+            rvs('>=0.2.3 || <0.0.1', '0.0.0'),
+            rvs('>=0.2.3 || <0.0.1', '0.2.3'),
+            rvs('>=0.2.3 || <0.0.1', '0.2.4'),
+            rvs('||', '1.3.4'),
+            rvs('2.x.x', '2.1.3'),
+            rvs('1.2.x', '1.2.3'),
+            rvs('1.2.x || 2.x', '2.1.3'),
+            rvs('1.2.x || 2.x', '1.2.3'),
+            rvs('x', '1.2.3'),
+            rvs('2.*.*', '2.1.3'),
+            rvs('1.2.*', '1.2.3'),
+            rvs('1.2.* || 2.*', '2.1.3'),
+            rvs('1.2.* || 2.*', '1.2.3'),
+            rvs('*', '1.2.3'),
+            rvs('2', '2.1.2'),
+            rvs('2.3', '2.3.1'),
+            rvs('~x', '0.0.9'), -- >=2.4.0 <2.5.0
+            rvs('~2', '2.0.9'), -- >=2.4.0 <2.5.0
+            rvs('~2.4', '2.4.0'), -- >=2.4.0 <2.5.0
+            rvs('~2.4', '2.4.5'),
+            rvs('~>3.2.1', '3.2.2'), -- >=3.2.1 <3.3.0,
+            rvs('~1', '1.2.3'), -- >=1.0.0 <2.0.0
+            rvs('~>1', '1.2.3'),
+            rvs('~> 1', '1.2.3'),
+            rvs('~1.0', '1.0.2'), -- >=1.0.0 <1.1.0,
+            rvs('~ 1.0', '1.0.2'),
+            rvs('~ 1.0.3', '1.0.12'),
+            rvs('>=1', '1.0.0'),
+            rvs('>= 1', '1.0.0'),
+            rvs('<1.2', '1.1.1'),
+            rvs('< 1.2', '1.1.1'),
+            rvs('~v0.5.4-pre', '0.5.5'),
+            rvs('~v0.5.4-pre', '0.5.4'),
+            rvs('=0.7.x', '0.7.2'),
+            rvs('<=0.7.x', '0.7.2'),
+            rvs('>=0.7.x', '0.7.2'),
+            rvs('<=0.7.x', '0.6.2'),
+            rvs('~1.2.1 >=1.2.3', '1.2.3'),
+            rvs('~1.2.1 =1.2.3', '1.2.3'),
+            rvs('~1.2.1 1.2.3', '1.2.3'),
+            rvs('~1.2.1 >=1.2.3 1.2.3', '1.2.3'),
+            rvs('~1.2.1 1.2.3 >=1.2.3', '1.2.3'),
+            rvs('~1.2.1 1.2.3', '1.2.3'),
+            rvs('>=1.2.1 1.2.3', '1.2.3'),
+            rvs('1.2.3 >=1.2.1', '1.2.3'),
+            rvs('>=1.2.3 >=1.2.1', '1.2.3'),
+            rvs('>=1.2.1 >=1.2.3', '1.2.3'),
+            rvs('>=1.2', '1.2.8'),
+            rvs('^1.2.3', '1.8.1'),
+            rvs('^0.1.2', '0.1.2'),
+            rvs('^0.1', '0.1.2'),
+            rvs('^0.0.1', '0.0.1'),
+            rvs('^1.2', '1.4.2'),
+            rvs('^1.2 ^1', '1.4.2'),
+            rvs('^1.2.3-alpha', '1.2.3-pre'),
+            rvs('^1.2.0-alpha', '1.2.0-pre'),
+            rvs('^0.0.1-alpha', '0.0.1-beta'),
+            rvs('^0.1.1-alpha', '0.1.1-beta'),
+            rvs('^x', '1.2.3'),
+            rvs('x - 1.0.0', '0.9.7'),
+            rvs('x - 1.x', '0.9.7'),
+            rvs('1.0.0 - x', '1.9.7'),
+            rvs('1.x - x', '1.9.7'),
+            rvs('<=7.x', '7.9.9')
+        );
+        -- NoFormat End
+    begin
+        pete.set_method_description(d);
+        for i in 1 .. samples.count loop
+            begin
+                 -- NoFormat Start
+                  pete_assert.this(
+                      semver.satisfies(samples(i).version, samples(i).range),
+                      'range "' || samples(i).range ||'" satisfied by "' || samples(i).version ||'"'
+                  );
+                -- NoFormat End
+            exception
+                when others then
+                    l_failed := true;
+                    dbms_output.put_line('range "' || samples(i).range || '" satisfied by "' || samples(i).version || '"' || chr(10) ||
+                                         'sqlerrm: ' || sqlerrm);
+            end;
+        end loop;
+        pete_assert.this(not l_failed, 'not failed');
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure negative_range_tests(d varchar2) is
+        l_failed boolean := false;
+        -- NoFormat Start
+        samples range_version_samples := range_version_samples(
+            rvs('1.0.0 - 2.0.0', '2.2.3'),
+            rvs('1.2.3+asdf - 2.4.3+asdf', '1.2.3-pre.2'),
+            rvs('1.2.3+asdf - 2.4.3+asdf', '2.4.3-alpha'),
+            rvs('^1.2.3+build', '2.0.0'),
+            rvs('^1.2.3+build', '1.2.0'),
+            rvs('^1.2.3', '1.2.3-pre'),
+            rvs('^1.2', '1.2.0-pre'),
+            rvs('>1.2', '1.3.0-beta'),
+            rvs('<=1.2.3', '1.2.3-beta'),
+            rvs('^1.2.3', '1.2.3-beta'),
+            rvs('=0.7.x', '0.7.0-asdf'),
+            rvs('>=0.7.x', '0.7.0-asdf'),
+            --rvs('1', '1.0.0beta', true),
+            --rvs('<1', '1.0.0beta', true),
+            --rvs('< 1', '1.0.0beta', true),
+            rvs('1.0.0', '1.0.1'),
+            rvs('>=1.0.0', '0.0.0'),
+            rvs('>=1.0.0', '0.0.1'),
+            rvs('>=1.0.0', '0.1.0'),
+            rvs('>1.0.0', '0.0.1'),
+            rvs('>1.0.0', '0.1.0'),
+            rvs('<=2.0.0', '3.0.0'),
+            rvs('<=2.0.0', '2.9999.9999'),
+            rvs('<=2.0.0', '2.2.9'),
+            rvs('<2.0.0', '2.9999.9999'),
+            rvs('<2.0.0', '2.2.9'),
+            -- requires loose implementation rvs('>=0.1.97', 'v0.1.93', true),
+            rvs('>=0.1.97', '0.1.93'),
+            rvs('0.1.20 || 1.2.4', '1.2.3'),
+            rvs('>=0.2.3 || <0.0.1', '0.0.3'),
+            rvs('>=0.2.3 || <0.0.1', '0.2.2'),
+            rvs('2.x.x', '1.1.3'),
+            rvs('2.x.x', '3.1.3'),
+            rvs('1.2.x', '1.3.3'),
+            rvs('1.2.x || 2.x', '3.1.3'),
+            rvs('1.2.x || 2.x', '1.1.3'),
+            rvs('2.*.*', '1.1.3'),
+            rvs('2.*.*', '3.1.3'),
+            rvs('1.2.*', '1.3.3'),
+            rvs('1.2.* || 2.*', '3.1.3'),
+            rvs('1.2.* || 2.*', '1.1.3'),
+            rvs('2', '1.1.2'),
+            rvs('2.3', '2.4.1'),
+            rvs('~2.4', '2.5.0'), -- >=2.4.0 <2.5.0
+            rvs('~2.4', '2.3.9'),
+            rvs('~>3.2.1', '3.3.2'), -- >=3.2.1 <3.3.0
+            rvs('~>3.2.1', '3.2.0'), -- >=3.2.1 <3.3.0
+            rvs('~1', '0.2.3'), -- >=1.0.0 <2.0.0
+            rvs('~>1', '2.2.3'),
+            rvs('~1.0', '1.1.0'), -- >=1.0.0 <1.1.0
+            rvs('<1', '1.0.0'),
+            rvs('>=1.2', '1.1.1'),
+            -- requires loose implementation rvs('1', '2.0.0beta', true),
+            rvs('~v0.5.4-beta', '0.5.4-alpha'),
+            rvs('=0.7.x', '0.8.2'),
+            rvs('>=0.7.x', '0.6.2'),
+            rvs('<0.7.x', '0.7.2'),
+            rvs('<1.2.3', '1.2.3-beta'),
+            rvs('=1.2.3', '1.2.3-beta'),
+            rvs('>1.2', '1.2.8'),
+            rvs('^0.0.1', '0.0.2'),
+            rvs('^1.2.3', '2.0.0-alpha'),
+            rvs('^1.2.3', '1.2.2'),
+            rvs('^1.2', '1.1.9'),
+            -- requires loose implementation rvs('*', 'v1.2.3-foo', true),
+            -- invalid ranges never satisfied!
+            rvs('blerg', '1.2.3'),
+            -- requires loose implementation rvs('git+https://user:password0123@github.com/foo', '123.0.0', true),
+            rvs('^1.2.3', '2.0.0-pre'),
+            rvs('^1.2.3', 'false')
+        );
+        -- NoFormat End
+    begin
+        pete.set_method_description(d);
+        for i in 1 .. samples.count loop
+            begin
+                 -- NoFormat Start
+                  pete_assert.this(
+                      not semver.satisfies(samples(i).version, samples(i).range),
+                      'range "' || samples(i).range ||'" not satisfied by "' || samples(i).version ||'"'
+                  );
+                -- NoFormat End
+            exception
+                when others then
+                    l_failed := true;
+            end;
+        end loop;
+        pete_assert.this(not l_failed, 'not failed');
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure increment_versions_test(d varchar2) is
+        l_failed boolean := false;
+        -- NoFormat Start
+        samples version_inc_samples := version_inc_samples(
+            vis('1.2.3', 'major', '2.0.0'),
+            vis('1.2.3', 'minor', '1.3.0'),
+            vis('1.2.3', 'patch', '1.2.4'),
+            -- requires loose implementation vis('1.2.3tag', 'major', '2.0.0', true),
+            vis('1.2.3-tag', 'major', '2.0.0'),
+            vis('1.2.3', 'fake', null),
+            vis('1.2.0-0', 'patch', '1.2.0'),
+            vis('fake', 'major', null),
+            vis('1.2.3-4', 'major', '2.0.0'),
+            vis('1.2.3-4', 'minor', '1.3.0'),
+            vis('1.2.3-4', 'patch', '1.2.3'),
+            vis('1.2.3-alpha.0.beta', 'major', '2.0.0'),
+            vis('1.2.3-alpha.0.beta', 'minor', '1.3.0'),
+            vis('1.2.3-alpha.0.beta', 'patch', '1.2.3'),
+            vis('1.2.4', 'prerelease', '1.2.5-0'),
+            vis('1.2.3-0', 'prerelease', '1.2.3-1'),
+            vis('1.2.3-alpha.0', 'prerelease', '1.2.3-alpha.1'),
+            vis('1.2.3-alpha.1', 'prerelease', '1.2.3-alpha.2'),
+            vis('1.2.3-alpha.2', 'prerelease', '1.2.3-alpha.3'),
+            vis('1.2.3-alpha.0.beta', 'prerelease', '1.2.3-alpha.1.beta'),
+            vis('1.2.3-alpha.1.beta', 'prerelease', '1.2.3-alpha.2.beta'),
+            vis('1.2.3-alpha.2.beta', 'prerelease', '1.2.3-alpha.3.beta'),
+            vis('1.2.3-alpha.10.0.beta', 'prerelease', '1.2.3-alpha.10.1.beta'),
+            vis('1.2.3-alpha.10.1.beta', 'prerelease', '1.2.3-alpha.10.2.beta'),
+            vis('1.2.3-alpha.10.2.beta', 'prerelease', '1.2.3-alpha.10.3.beta'),
+            vis('1.2.3-alpha.10.beta.0', 'prerelease', '1.2.3-alpha.10.beta.1'),
+            vis('1.2.3-alpha.10.beta.1', 'prerelease', '1.2.3-alpha.10.beta.2'),
+            vis('1.2.3-alpha.10.beta.2', 'prerelease', '1.2.3-alpha.10.beta.3'),
+            vis('1.2.3-alpha.9.beta', 'prerelease', '1.2.3-alpha.10.beta'),
+            vis('1.2.3-alpha.10.beta', 'prerelease', '1.2.3-alpha.11.beta'),
+            vis('1.2.3-alpha.11.beta', 'prerelease', '1.2.3-alpha.12.beta'),
+            vis('1.2.0', 'prepatch', '1.2.1-0'),
+            vis('1.2.0-1', 'prepatch', '1.2.1-0'),
+            vis('1.2.0', 'preminor', '1.3.0-0'),
+            vis('1.2.3-1', 'preminor', '1.3.0-0'),
+            vis('1.2.0', 'premajor', '2.0.0-0'),
+            vis('1.2.3-1', 'premajor', '2.0.0-0'),
+            vis('1.2.0-1', 'minor', '1.2.0'),
+            vis('1.0.0-1', 'major', '1.0.0'),
+            --
+            vis('1.2.3', 'major', '2.0.0', false, 'dev'),
+            vis('1.2.3', 'minor', '1.3.0', false, 'dev'),
+            vis('1.2.3', 'patch', '1.2.4', false, 'dev'),
+            -- requires loose implementation vis('1.2.3tag', 'major', '2.0.0', true, 'dev'),
+            vis('1.2.3-tag', 'major', '2.0.0', false, 'dev'),
+            vis('1.2.3', 'fake', null, false, 'dev'),
+            vis('1.2.0-0', 'patch', '1.2.0', false, 'dev'),
+            vis('fake', 'major', null, false, 'dev'),
+            vis('1.2.3-4', 'major', '2.0.0', false, 'dev'),
+            vis('1.2.3-4', 'minor', '1.3.0', false, 'dev'),
+            vis('1.2.3-4', 'patch', '1.2.3', false, 'dev'),
+            vis('1.2.3-alpha.0.beta', 'major', '2.0.0', false, 'dev'),
+            vis('1.2.3-alpha.0.beta', 'minor', '1.3.0', false, 'dev'),
+            vis('1.2.3-alpha.0.beta', 'patch', '1.2.3', false, 'dev'),
+            vis('1.2.4', 'prerelease', '1.2.5-dev.0', false, 'dev'),
+            vis('1.2.3-0', 'prerelease', '1.2.3-dev.0', false, 'dev'),
+            vis('1.2.3-alpha.0', 'prerelease', '1.2.3-dev.0', false, 'dev'),
+            vis('1.2.3-alpha.0', 'prerelease', '1.2.3-alpha.1', false, 'alpha'),
+            vis('1.2.3-alpha.0.beta', 'prerelease', '1.2.3-dev.0', false, 'dev'),
+            vis('1.2.3-alpha.0.beta', 'prerelease', '1.2.3-alpha.1.beta', false, 'alpha'),
+            vis('1.2.3-alpha.10.0.beta', 'prerelease', '1.2.3-dev.0', false, 'dev'),
+            vis('1.2.3-alpha.10.0.beta', 'prerelease', '1.2.3-alpha.10.1.beta', false, 'alpha'),
+            vis('1.2.3-alpha.10.1.beta', 'prerelease', '1.2.3-alpha.10.2.beta', false, 'alpha'),
+            vis('1.2.3-alpha.10.2.beta', 'prerelease', '1.2.3-alpha.10.3.beta', false, 'alpha'),
+            vis('1.2.3-alpha.10.beta.0', 'prerelease', '1.2.3-dev.0', false, 'dev'),
+            vis('1.2.3-alpha.10.beta.0', 'prerelease', '1.2.3-alpha.10.beta.1', false, 'alpha'),
+            vis('1.2.3-alpha.10.beta.1', 'prerelease', '1.2.3-alpha.10.beta.2', false, 'alpha'),
+            vis('1.2.3-alpha.10.beta.2', 'prerelease', '1.2.3-alpha.10.beta.3', false, 'alpha'),
+            vis('1.2.3-alpha.9.beta', 'prerelease', '1.2.3-dev.0', false, 'dev'),
+            vis('1.2.3-alpha.9.beta', 'prerelease', '1.2.3-alpha.10.beta', false, 'alpha'),
+            vis('1.2.3-alpha.10.beta', 'prerelease', '1.2.3-alpha.11.beta', false, 'alpha'),
+            vis('1.2.3-alpha.11.beta', 'prerelease', '1.2.3-alpha.12.beta', false, 'alpha'),
+            vis('1.2.0', 'prepatch', '1.2.1-dev.0', false, 'dev'),
+            vis('1.2.0-1', 'prepatch', '1.2.1-dev.0', false, 'dev'),
+            vis('1.2.0', 'preminor', '1.3.0-dev.0', false, 'dev'),
+            vis('1.2.3-1', 'preminor', '1.3.0-dev.0', false, 'dev'),
+            vis('1.2.0', 'premajor', '2.0.0-dev.0', false, 'dev'),
+            vis('1.2.3-1', 'premajor', '2.0.0-dev.0', false, 'dev'),
+            vis('1.2.0-1', 'minor', '1.2.0', false, 'dev'),
+            vis('1.0.0-1', 'major', '1.0.0', false, 'dev'),
+            vis('1.2.3-dev.bar', 'prerelease', '1.2.3-dev.0', false, 'dev')
+        );
+        -- NoFormat End
+        l_parsed semver_version;
+        l_found  varchar2(256);
+        l_cmd    varchar2(512);
+        s        version_inc_sample;
+    begin
+        pete.set_method_description(d);
+        for i in 1 .. samples.count loop
+            begin
+                 -- NoFormat Start
+                 s := samples(i);
+                 l_found  := semver.inc(s.pre, s.what, s.id);
+                 l_cmd    := 'inc(' || s.pre || ', ' || s.what || ', ' || s.id || ')';
+                
+                 pete_assert.eq(
+                    s.result,
+                    l_found,
+                    l_cmd || ' = ' || s.result
+                 );
+                
+                 l_parsed := semver.parse(s.pre);
+                 if s.result is not null then
+                    -- expecting result
+                    l_parsed.inc(s.what, s.id);
+                    pete_assert.eq(s.result, l_parsed.to_string(), l_cmd || ' version updated');
+                 elsif l_parsed is not null then
+                    -- version is valid and not expecting result -> call should throw
+                    declare
+                        l_thrown boolean := false;
+                    begin
+                        begin
+                            l_parsed.inc(s.what, s.id);
+                        exception
+                            when others then
+                                l_thrown := true;
+                        end;
+                        pete_assert.this(l_thrown, 'Call should have thrown');
+                    end;
+                 else
+                    pete_assert.this(l_parsed is null, 'parsed version should be null');
+                 end if;
+                -- NoFormat End
+            exception
+                when others then
+                    dbms_output.put_line('inc(' || s.pre || ', ' || s.what || ', ' || s.id || ') failed: ' || sqlerrm);
+                    l_failed := true;
+            end;
+        end loop;
+        pete_assert.this(not l_failed, 'not failed');
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure diff_versions_test(d varchar2) is
+        l_failed boolean := false;
+        -- NoFormat Start
+        samples version_diff_samples := version_diff_samples(
+            vds('1.2.3', '0.2.3', 'major'),
+            vds('1.4.5', '0.2.3', 'major'),
+            vds('1.2.3', '2.0.0-pre', 'premajor'),
+            vds('1.2.3', '1.3.3', 'minor'),
+            vds('1.0.1', '1.1.0-pre', 'preminor'),
+            vds('1.2.3', '1.2.4', 'patch'),
+            vds('1.2.3', '1.2.4-pre', 'prepatch'),
+            vds('0.0.1', '0.0.1-pre', 'prerelease'),
+            vds('0.0.1', '0.0.1-pre-2', 'prerelease'),
+            vds('1.1.0', '1.1.0-pre', 'prerelease'),
+            vds('1.1.0-pre-1', '1.1.0-pre-2', 'prerelease'),
+            vds('1.0.0', '1.0.0', null)           
+        );
+        -- NoFormat End
+        s        version_diff_sample;
+        l_msg    varchar2(500);
+    begin
+        pete.set_method_description(d);
+        for i in 1 .. samples.count loop
+            begin
+                s     := samples(i);
+                l_msg := 'diff(' || s.v1 || ', ' || s.v2 || ') =' || s.result;
+                -- NoFormat Start
+                if s.result is not null then
+                    pete_assert.eq(s.result, semver.diff(s.v1, s.v2), l_msg);
                 else
-                    for j in 1 .. samples(i).expected.count loop
-                        pete_assert.eq(samples(i).expected(j),
-                                       l_tags(j),
-                                       'semver.prerelease(''' || samples(i).test || ''')(' || j || ') should be ' || samples(i).expected(j));
-                    end loop;
+                    pete_assert.is_null(semver.diff(s.v1, s.v2), l_msg);
                 end if;
+                -- NoFormat End
             exception
                 when others then
+                    dbms_output.put_line(l_msg || ' failed: ' || sqlerrm);
+                    l_failed := true;
+            end;
+        end loop;
+        pete_assert.this(not l_failed, 'not failed');
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure valid_range_tests(d varchar2) is
+        l_failed boolean := false;
+        -- NoFormat Start
+        samples value_result_samples := value_result_samples(
+            vrs('1.0.0 - 2.0.0', '>=1.0.0 <=2.0.0'),
+            vrs('1.0.0', '1.0.0'),
+            vrs('>=*', '*'),
+            vrs('', '*'),
+            vrs('*', '*'),
+            vrs('*', '*'),
+            vrs('>=1.0.0', '>=1.0.0'),
+            vrs('>1.0.0', '>1.0.0'),
+            vrs('<=2.0.0', '<=2.0.0'),
+            vrs('1', '>=1.0.0 <2.0.0'),
+            vrs('<=2.0.0', '<=2.0.0'),
+            vrs('<=2.0.0', '<=2.0.0'),
+            vrs('<2.0.0', '<2.0.0'),
+            vrs('<2.0.0', '<2.0.0'),
+            vrs('>= 1.0.0', '>=1.0.0'),
+            vrs('>=  1.0.0', '>=1.0.0'),
+            vrs('>=   1.0.0', '>=1.0.0'),
+            vrs('> 1.0.0', '>1.0.0'),
+            vrs('>  1.0.0', '>1.0.0'),
+            vrs('<=   2.0.0', '<=2.0.0'),
+            vrs('<= 2.0.0', '<=2.0.0'),
+            vrs('<=  2.0.0', '<=2.0.0'),
+            vrs('<    2.0.0', '<2.0.0'),
+            vrs('<	2.0.0', '<2.0.0'),
+            vrs('>=0.1.97', '>=0.1.97'),
+            vrs('>=0.1.97', '>=0.1.97'),
+            vrs('0.1.20 || 1.2.4', '0.1.20||1.2.4'),
+            vrs('>=0.2.3 || <0.0.1', '>=0.2.3||<0.0.1'),
+            vrs('>=0.2.3 || <0.0.1', '>=0.2.3||<0.0.1'),
+            vrs('>=0.2.3 || <0.0.1', '>=0.2.3||<0.0.1'),
+            vrs('||', '||'),
+            vrs('2.x.x', '>=2.0.0 <3.0.0'),
+            vrs('1.2.x', '>=1.2.0 <1.3.0'),
+            vrs('1.2.x || 2.x', '>=1.2.0 <1.3.0||>=2.0.0 <3.0.0'),
+            vrs('1.2.x || 2.x', '>=1.2.0 <1.3.0||>=2.0.0 <3.0.0'),
+            vrs('x', '*'),
+            vrs('2.*.*', '>=2.0.0 <3.0.0'),
+            vrs('1.2.*', '>=1.2.0 <1.3.0'),
+            vrs('1.2.* || 2.*', '>=1.2.0 <1.3.0||>=2.0.0 <3.0.0'),
+            vrs('*', '*'),
+            vrs('2', '>=2.0.0 <3.0.0'),
+            vrs('2.3', '>=2.3.0 <2.4.0'),
+            vrs('~2.4', '>=2.4.0 <2.5.0'),
+            vrs('~2.4', '>=2.4.0 <2.5.0'),
+            vrs('~>3.2.1', '>=3.2.1 <3.3.0'),
+            vrs('~1', '>=1.0.0 <2.0.0'),
+            vrs('~>1', '>=1.0.0 <2.0.0'),
+            vrs('~> 1', '>=1.0.0 <2.0.0'),
+            vrs('~1.0', '>=1.0.0 <1.1.0'),
+            vrs('~ 1.0', '>=1.0.0 <1.1.0'),
+            vrs('^0', '>=0.0.0 <1.0.0'),
+            vrs('^ 1', '>=1.0.0 <2.0.0'),
+            vrs('^0.1', '>=0.1.0 <0.2.0'),
+            vrs('^1.0', '>=1.0.0 <2.0.0'),
+            vrs('^1.2', '>=1.2.0 <2.0.0'),
+            vrs('^0.0.1', '>=0.0.1 <0.0.2'),
+            vrs('^0.0.1-beta', '>=0.0.1-beta <0.0.2'),
+            vrs('^0.1.2', '>=0.1.2 <0.2.0'),
+            vrs('^1.2.3', '>=1.2.3 <2.0.0'),
+            vrs('^1.2.3-beta.4', '>=1.2.3-beta.4 <2.0.0'),
+            vrs('<1', '<1.0.0'),
+            vrs('< 1', '<1.0.0'),
+            vrs('>=1', '>=1.0.0'),
+            vrs('>= 1', '>=1.0.0'),
+            vrs('<1.2', '<1.2.0'),
+            vrs('< 1.2', '<1.2.0'),
+            vrs('1', '>=1.0.0 <2.0.0'),
+            -- requies loose implementation vrs('>01.02.03', '>1.2.3', true),
+            vrs('>01.02.03', null),
+            -- requies loose implementation  vrs('~1.2.3beta', '>=1.2.3-beta <1.3.0', true),
+            vrs('~1.2.3beta', null),
+            vrs('^ 1.2 ^ 1', '>=1.2.0 <2.0.0 >=1.0.0 <2.0.0')
+        );
+        -- NoFormat End
+        s        value_result_sample;
+        l_msg    varchar2(500);
+    begin
+        pete.set_method_description(d);
+        for i in 1 .. samples.count loop
+            begin
+                s     := samples(i);
+                l_msg := 'valid_range(' || s.value || ') = ' || s.result;
+                -- NoFormat Start
+                if s.result is not null then
+                    pete_assert.eq(s.result, semver.valid_range(s.value), l_msg);
+                else
+                    pete_assert.is_null(semver.valid_range(s.value), l_msg);
+                end if;
+                -- NoFormat End
+            exception
+                when others then
+                    dbms_output.put_line(l_msg || ' failed: ' || sqlerrm);
+                    l_failed := true;
+            end;
+        end loop;
+        pete_assert.this(not l_failed, 'not failed');
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure range_to_comparators_test(d varchar2) is
+        l_failed    boolean := false;
+        -- NoFormat Start
+        samples range_comparators_samples := range_comparators_samples(
+            rcs('1.0.0 - 2.0.0', rt(ct('>=1.0.0', '<=2.0.0'))),
+            rcs('1.0.0 - 2.0.0', rt(ct('>=1.0.0', '<=2.0.0'))),
+            rcs('1.0.0', rt(ct('1.0.0'))),
+            rcs('>=*', rt(ct(''))),
+            rcs('', rt(ct(''))),
+            rcs('*', rt(ct(''))),
+            rcs('*', rt(ct(''))),
+            rcs('>=1.0.0', rt(ct('>=1.0.0'))),
+            rcs('>=1.0.0', rt(ct('>=1.0.0'))),
+            rcs('>=1.0.0', rt(ct('>=1.0.0'))),
+            rcs('>1.0.0', rt(ct('>1.0.0'))),
+            rcs('>1.0.0', rt(ct('>1.0.0'))),
+            rcs('<=2.0.0', rt(ct('<=2.0.0'))),
+            rcs('1', rt(ct('>=1.0.0', '<2.0.0'))),
+            rcs('<=2.0.0', rt(ct('<=2.0.0'))),
+            rcs('<=2.0.0', rt(ct('<=2.0.0'))),
+            rcs('<2.0.0', rt(ct('<2.0.0'))),
+            rcs('<2.0.0', rt(ct('<2.0.0'))),
+            rcs('>= 1.0.0', rt(ct('>=1.0.0'))),
+            rcs('>=  1.0.0', rt(ct('>=1.0.0'))),
+            rcs('>=   1.0.0', rt(ct('>=1.0.0'))),
+            rcs('> 1.0.0', rt(ct('>1.0.0'))),
+            rcs('>  1.0.0', rt(ct('>1.0.0'))),
+            rcs('<=   2.0.0', rt(ct('<=2.0.0'))),
+            rcs('<= 2.0.0', rt(ct('<=2.0.0'))),
+            rcs('<=  2.0.0', rt(ct('<=2.0.0'))),
+            rcs('<    2.0.0', rt(ct('<2.0.0'))),
+            rcs('<'|| chr(9) || '2.0.0', rt(ct('<2.0.0'))),
+            rcs('>=0.1.97', rt(ct('>=0.1.97'))),
+            rcs('>=0.1.97', rt(ct('>=0.1.97'))),
+            rcs('0.1.20 || 1.2.4', rt(ct('0.1.20'), ct('1.2.4'))),
+            rcs('>=0.2.3 || <0.0.1', rt(ct('>=0.2.3'), ct('<0.0.1'))),
+            rcs('>=0.2.3 || <0.0.1', rt(ct('>=0.2.3'), ct('<0.0.1'))),
+            rcs('>=0.2.3 || <0.0.1', rt(ct('>=0.2.3'), ct('<0.0.1'))),
+            rcs('||', rt(ct(''), ct(''))),
+            rcs('2.x.x', rt(ct('>=2.0.0', '<3.0.0'))),
+            rcs('1.2.x', rt(ct('>=1.2.0', '<1.3.0'))),
+            rcs('1.2.x || 2.x', rt(ct('>=1.2.0', '<1.3.0'), ct('>=2.0.0', '<3.0.0'))),
+            rcs('1.2.x || 2.x', rt(ct('>=1.2.0', '<1.3.0'), ct('>=2.0.0', '<3.0.0'))),
+            rcs('x', rt(ct(''))),
+            rcs('2.*.*', rt(ct('>=2.0.0', '<3.0.0'))),
+            rcs('1.2.*', rt(ct('>=1.2.0', '<1.3.0'))),
+            rcs('1.2.* || 2.*', rt(ct('>=1.2.0', '<1.3.0'), ct('>=2.0.0', '<3.0.0'))),
+            rcs('1.2.* || 2.*', rt(ct('>=1.2.0', '<1.3.0'), ct('>=2.0.0', '<3.0.0'))),
+            rcs('*', rt(ct(''))),
+            rcs('2', rt(ct('>=2.0.0', '<3.0.0'))),
+            rcs('2.3', rt(ct('>=2.3.0', '<2.4.0'))),
+            rcs('~2.4', rt(ct('>=2.4.0', '<2.5.0'))),
+            rcs('~2.4', rt(ct('>=2.4.0', '<2.5.0'))),
+            rcs('~>3.2.1', rt(ct('>=3.2.1', '<3.3.0'))),
+            rcs('~1', rt(ct('>=1.0.0', '<2.0.0'))),
+            rcs('~>1', rt(ct('>=1.0.0', '<2.0.0'))),
+            rcs('~> 1', rt(ct('>=1.0.0', '<2.0.0'))),
+            rcs('~1.0', rt(ct('>=1.0.0', '<1.1.0'))),
+            rcs('~ 1.0', rt(ct('>=1.0.0', '<1.1.0'))),
+            rcs('~ 1.0.3', rt(ct('>=1.0.3', '<1.1.0'))),
+            rcs('~> 1.0.3', rt(ct('>=1.0.3', '<1.1.0'))),
+            rcs('<1', rt(ct('<1.0.0'))),
+            rcs('< 1', rt(ct('<1.0.0'))),
+            rcs('>=1', rt(ct('>=1.0.0'))),
+            rcs('>= 1', rt(ct('>=1.0.0'))),
+            rcs('<1.2', rt(ct('<1.2.0'))),
+            rcs('< 1.2', rt(ct('<1.2.0'))),
+            rcs('1', rt(ct('>=1.0.0', '<2.0.0'))),
+            rcs('1 2', rt(ct('>=1.0.0', '<2.0.0', '>=2.0.0', '<3.0.0'))),
+            rcs('1.2 - 3.4.5', rt(ct('>=1.2.0', '<=3.4.5'))),
+            rcs('1.2.3 - 3.4', rt(ct('>=1.2.3', '<3.5.0'))),
+            rcs('1.2.3 - 3', rt(ct('>=1.2.3', '<4.0.0'))),
+            rcs('>*', rt(ct('<0.0.0'))),
+            rcs('<*', rt(ct('<0.0.0')))
+        );
+        -- NoFormat End
+        s           range_comparators_sample;
+        l_range_set semver_range_set;
+        l_msg       varchar2(500);
+    begin
+        pete.set_method_description(d);
+        for i in 1 .. samples.count loop
+            begin
+                s           := samples(i);
+                l_range_set := semver.parse_range(s.range);
+                l_msg       := 'comparators of ' || l_range_set.to_string() || ' should be ' || rcs_to_string(s);
+                --
+                <<semver_ranges_loop>>
+                for i in 1 .. l_range_set.ranges.count loop
+                    <<semver_comparators_loop>>
+                    for ii in 1 .. l_range_set.ranges(i).comparators.count loop
+                        pete_assert.eq(nvl(s.ranges(i) (ii), '<null>'),
+                                       nvl(l_range_set.ranges(i).comparators(ii).to_string(), '<null>'),
+                                       l_msg);
+                    end loop semver_comparators_loop;
+                end loop semver_ranges_loop;
+                --
+            exception
+                when others then
+                    dbms_output.put_line(l_msg || ' failed: ' || sqlerrm);
+                    l_failed := true;
+            end;
+        end loop;
+        pete_assert.this(not l_failed, 'not failed');
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure max_satisfying(d varchar2) is
+        l_failed    boolean := false;
+        -- NoFormat Start
+        samples satisfying_samples := satisfying_samples(
+            svs(semver.semver_string_table_type('1.2.3', '1.2.4'), '1.2', '1.2.4'),
+            svs(semver.semver_string_table_type('1.2.4', '1.2.3'), '1.2', '1.2.4'),
+            svs(semver.semver_string_table_type('1.2.3', '1.2.4', '1.2.5', '1.2.6'), '~1.2.3', '1.2.6'),
+            svs(semver.semver_string_table_type('1.1.0', '1.2.0', '1.2.1', '1.3.0', '2.0.0-b1', '2.0.0-b2', '2.0.0-b3', '2.0.0', '2.1.0'), '~2.0.0', '2.0.0', true)
+            -- requires loose implementation (('1.1.0', '1.2.0', '1.2.1', '1.3.0', '2.0.0b1', '2.0.0b2', '2.0.0b3', '2.0.0', '2.1.0'), '~2.0.0', '2.0.0', true)
+        );
+        -- NoFormat End
+        s           satisfying_sample;
+        l_range_set semver_range_set;
+        l_msg       varchar2(500);
+    
+        function string_table_to_string(tab semver.semver_string_table_type) return varchar2 is
+            l_result varchar2(512);
+        begin
+            for i in 1 .. tab.count loop
+                l_result := l_result || semver_util.ternary_varchar2(i = 1, tab(i), ',' || tab(i));
+            end loop;
+            return '(' || l_result || ')';
+        end;
+    
+    begin
+        pete.set_method_description(d);
+        for i in 1 .. samples.count loop
+            begin
+                s           := samples(i);
+                l_range_set := semver.parse_range(s.range);
+                l_msg       := 'max satisfying version from ' || string_table_to_string(s.versions) || ' for range ' || s.range ||
+                               ' should be ' || s.result;
+                --
+                pete_assert.eq(s.result, semver.max_satisfying(s.versions, s.range), l_msg);
+                --
+            exception
+                when others then
+                    dbms_output.put_line(l_msg || ' failed: ' || sqlerrm);
                     l_failed := true;
                     raise;
             end;
@@ -186,39 +972,45 @@ create or replace package body ut_semver as
         end if;
     end;
 
-    ----------------------------------------------------------------------------  
-    procedure build(d varchar2) is
-        l_failed boolean := false;
-        l_tags   semver_tags;
+    ----------------------------------------------------------------------------
+    procedure min_satisfying(d varchar2) is
+        l_failed    boolean := false;
         -- NoFormat Start
-        samples tags_test_samples := tags_test_samples(
-            tts('1.2.2+alpha.1', semver_tags('alpha', 1)),
-            tts('0.6.1+1', semver_tags('1')),
-            tts('1.0.0+beta.2', semver_tags('beta','2')),
-            tts('v0.5.4+pre', semver_tags('pre')),
-            tts('1.2.2+alpha.1', semver_tags('alpha','1')),
-            tts('~2.0.0+alpha.1', null),
-            tts('invalid version', null)
+        samples satisfying_samples := satisfying_samples(
+            svs(semver.semver_string_table_type('1.2.3', '1.2.4'), '1.2', '1.2.3'),
+            svs(semver.semver_string_table_type('1.2.4', '1.2.3'), '1.2', '1.2.3'),
+            svs(semver.semver_string_table_type('1.2.3', '1.2.4', '1.2.5', '1.2.6'), '~1.2.3', '1.2.3'),
+            svs(semver.semver_string_table_type('1.1.0', '1.2.0', '1.2.1', '1.3.0', '2.0.0-b1', '2.0.0-b2', '2.0.0-b3', '2.0.0', '2.1.0'), '~2.0.0', '2.0.0')
+            -- x1 requires loose implementation [['1.1.0', '1.2.0', '1.2.1', '1.3.0', '2.0.0b1', '2.0.0b2', '2.0.0b3', '2.0.0', '2.1.0'], '~2.0.0', '2.0.0', true]
         );
         -- NoFormat End
+        s           satisfying_sample;
+        l_range_set semver_range_set;
+        l_msg       varchar2(500);
+    
+        function string_table_to_string(tab semver.semver_string_table_type) return varchar2 is
+            l_result varchar2(512);
+        begin
+            for i in 1 .. tab.count loop
+                l_result := l_result || semver_util.ternary_varchar2(i = 1, tab(i), ',' || tab(i));
+            end loop;
+            return '(' || l_result || ')';
+        end;
+    
     begin
         pete.set_method_description(d);
         for i in 1 .. samples.count loop
             begin
-                l_tags := semver.build(samples(i).test);
-                if samples(i).expected is null then
-                    if l_tags is not null then
-                        pete_assert.is_null('build tags', 'semver.build(''' || samples(i).test || ''') should be null');
-                    end if;
-                else
-                    for j in 1 .. samples(i).expected.count loop
-                        pete_assert.eq(samples(i).expected(j),
-                                       l_tags(j),
-                                       'semver.build(''' || samples(i).test || ''')(' || j || ') should be ' || samples(i).expected(j));
-                    end loop;
-                end if;
+                s           := samples(i);
+                l_range_set := semver.parse_range(s.range);
+                l_msg       := 'min satisfying version from ' || string_table_to_string(s.versions) || ' for range ' || s.range ||
+                               ' should be ' || s.result;
+                --
+                pete_assert.eq(s.result, semver.min_satisfying(s.versions, s.range), l_msg);
+                --
             exception
                 when others then
+                    dbms_output.put_line(l_msg || ' failed: ' || sqlerrm);
                     l_failed := true;
                     raise;
             end;

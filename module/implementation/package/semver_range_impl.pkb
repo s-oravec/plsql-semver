@@ -77,6 +77,7 @@ create or replace package body semver_range_impl as
         a_range   in semver_range,
         a_version in semver_version
     ) return boolean is
+        l_allowed semver_version;
     begin
         if a_version is null then
             return false;
@@ -86,6 +87,38 @@ create or replace package body semver_range_impl as
                     return false;
                 end if;
             end loop;
+        
+            if a_version.prerelease is not null and a_version.prerelease.count > 0 then
+                d.log('version "' || a_version.to_string() || '" has prerelease - check range "' || a_range.to_string() || '" comparators');
+                -- Find the set of versions that are allowed to have prereleases
+                -- For example, ^1.2.3-pr.1 desugars to >=1.2.3-pr.1 <2.0.0
+                -- That should allow `1.2.3-pr.2` to pass.
+                -- However, `1.2.4-alpha.notready` should NOT be allowed,
+                -- even though it's within the range set by the comparators.
+                for j in 1 .. a_range.comparators.count loop
+                
+                    if a_range.comparators(j).operator is null then
+                        continue;
+                    end if;
+                
+                    l_allowed := a_range.comparators(j).version;
+                    -- NoFormat Start                
+                    if l_allowed.prerelease is not null and l_allowed.prerelease.count > 0 then
+                        if (l_allowed.major = a_version.major and 
+                            l_allowed.minor = a_version.minor and 
+                            l_allowed.patch = a_version.patch)
+                        then
+                            d.log('Comparator "' || a_range.comparators(j).to_string() || '" has same prerelease as version , yay!');
+                            return true;
+                        end if;
+                    end if;
+                    -- NoFormat End
+                end loop;
+            
+                d.log('Version has a -prerelease, but it''s not one of the ones we like');
+                return false;
+            end if;
+        
             return true;
         end if;
     end;
@@ -128,6 +161,33 @@ create or replace package body semver_range_impl as
             end loop;
         end loop;
         return false;
+    end;
+
+    ----------------------------------------------------------------------------
+    function satisfying
+    (
+        a_versions           in semver_versions,
+        a_range_set          in semver_range_set,
+        a_aggregate_function in aggregate_function_type
+    ) return semver_version is
+        l_selected       semver_version;
+        l_compare_result semver.compare_result_type;
+    begin
+        if a_aggregate_function = semver_range_impl.FN_MAX then
+            l_compare_result := semver.COMPARE_RESULT_LT;
+        elsif a_aggregate_function = semver_range_impl.FN_MIN then
+            l_compare_result := semver.COMPARE_RESULT_GT;
+        end if;
+        for i in 1 .. a_versions.count loop
+            if test(a_range_set, a_versions(i)) then
+                -- satisfies(version, range)
+                if l_selected is null or l_selected.compare(a_versions(i)) = l_compare_result then
+                    -- previous max/min is less than/greater than
+                    l_selected := a_versions(i);
+                end if;
+            end if;
+        end loop;
+        return l_selected;
     end;
 
 end;

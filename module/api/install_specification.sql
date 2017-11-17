@@ -4,6 +4,9 @@ prompt .. Creating type SEMVER_TAGS
 prompt .. Creating type SEMVER_VERSION
 @@type/semver_version.tps
 
+prompt .. Creating type SEMVER_VERSIONS
+@@type/semver_versions.tps
+
 prompt .. Creating type SEMVER_COMPARATOR
 @@type/semver_comparator.tps
 

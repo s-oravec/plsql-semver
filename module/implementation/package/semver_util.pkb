@@ -1,5 +1,16 @@
 create or replace package body semver_util as
 
+    type exception_table is table of semver.exception_sqlerrm_type index by pls_integer;
+    g_exceptions exception_table;
+
+    ----------------------------------------------------------------------------  
+    procedure register_exceptions is
+    begin
+        g_exceptions.delete;
+        g_exceptions(semver.INVALID_VERSION_SQLCODE) := semver.INVALID_VERSION_SQLERRM;
+        g_exceptions(semver.VERSION_TOO_LONG_SQLCODE) := semver.VERSION_TOO_LONG_SQLERRM;
+    end;
+
     ----------------------------------------------------------------------------
     function value_at_position
     (
@@ -84,5 +95,17 @@ create or replace package body semver_util as
         end if;
     end;
 
+    ----------------------------------------------------------------------------
+    procedure raise_exception
+    (
+        a_sqlcode              in pls_integer,
+        a_sqlerrm_placeholder1 in varchar2
+    ) is
+    begin
+        raise_application_error(a_sqlcode, replace(g_exceptions(a_sqlcode), '$1', a_sqlerrm_placeholder1));
+    end;
+
+begin
+    register_exceptions;
 end;
 /

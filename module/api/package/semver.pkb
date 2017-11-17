@@ -1,11 +1,11 @@
 create or replace package body semver as
 
-    -- d debug := new debug('semver');
+    d debug := new debug('semver');
 
     ----------------------------------------------------------------------------
     function parse(value in varchar2) return semver_version is
     begin
-        if length(value) > semver_common.MAX_LENGTH then
+        if length(value) > semver.MAX_LENGTH then
             return null;
         end if;
         return semver_version(value);
@@ -331,6 +331,9 @@ create or replace package body semver as
         else
             return null;
         end if;
+    exception
+        when others then
+            return null;
     end;
 
     ----------------------------------------------------------------------------
@@ -391,11 +394,81 @@ create or replace package body semver as
     begin
         l_range_set := parse_range(value);
         if l_range_set is not null then
-            -- passed value is valid so just trim space and replace \s+ with \s
-            return trim(regexp_replace(value, '\s+', ' '));
+            return l_range_set.to_string();
         else
             return null;
         end if;
+    end;
+
+    ----------------------------------------------------------------------------
+    function satisfying
+    (
+        versions           in semver_string_table_type,
+        range_set          in varchar2,
+        aggregate_function in semver_range_impl.aggregate_function_type
+    ) return varchar2 is
+        l_versions  semver_versions;
+        l_range_set semver_range_set;
+        l_result    semver_version;
+    begin
+        -- try parse vesions
+        if versions is null or versions.count = 0 then
+            d.log('satisfying is null when versions is empty or null');
+            return null;
+        else
+            d.log('parse versions');
+            l_versions := semver_versions();
+            for i in 1 .. versions.count loop
+                declare
+                    l_version semver_version := parse(versions(i));
+                begin
+                    if l_version is not null then
+                        l_versions.extend();
+                        l_versions(l_versions.count) := l_version;
+                    end if;
+                end;
+            end loop;
+            --
+            if l_versions.count = 0 then
+                d.log('no version left after parse attempts');
+                return null;
+            end if;
+        end if;
+        d.log('try parse range');
+        l_range_set := parse_range(range_set);
+        if l_range_set is not null then
+            l_result := semver_range_impl.satisfying(l_versions, l_range_set, aggregate_function);
+            if l_result is null then
+                d.log('satisfying is null');
+                return null;
+            else
+                d.log('return ' || l_result.to_string());
+                return l_result.to_string();
+            end if;
+        else
+            d.log('parsing range failed');
+            return null;
+        end if;
+    end;
+
+    ----------------------------------------------------------------------------
+    function max_satisfying
+    (
+        versions  in semver_string_table_type,
+        range_set in varchar2
+    ) return varchar2 is
+    begin
+        return satisfying(versions, range_set, semver_range_impl.FN_MAX);
+    end;
+
+    ----------------------------------------------------------------------------
+    function min_satisfying
+    (
+        versions  in semver_string_table_type,
+        range_set in varchar2
+    ) return varchar2 is
+    begin
+        return satisfying(versions, range_set, semver_range_impl.FN_MIN);
     end;
 
 ----------------------------------------------------------------------------  

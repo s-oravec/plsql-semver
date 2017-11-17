@@ -1,8 +1,5 @@
 create or replace package semver_version_impl as
 
-    -- MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER || 9007199254740991;
-    MAX_SAFE_INTEGER constant pls_integer := power(2, 31) - 1;
-
     /**
     Validates version and returns it when it is valid SemVer version
     

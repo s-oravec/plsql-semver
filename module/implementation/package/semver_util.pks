@@ -10,7 +10,6 @@ create or replace package semver_util as
     subtype typ_regexp_name is varchar2(30);
     type typ_regexp_tab is table of typ_regexp index by varchar2(30);
 
-
     function value_at_position
     (
         a_delimited_string in varchar2,
@@ -37,6 +36,12 @@ create or replace package semver_util as
         a_value_true  in pls_integer,
         a_value_false in pls_integer default null
     ) return pls_integer;
+
+    procedure raise_exception
+    (
+        a_sqlcode              in pls_integer,
+        a_sqlerrm_placeholder1 in varchar2
+    );
 
 end;
 /

@@ -1,0 +1,261 @@
+create or replace package ut_semver_version as
+
+    description constant pete_types.typ_description := 'semver_version';
+
+    procedure major(d varchar2 := 'major version should be detectable despite extra characters');
+    procedure minor(d varchar2 := 'minor version should be detectable despite extra characters');
+    procedure patch(d varchar2 := 'patch version should be detectable despite extra characters');
+
+    procedure prerelease(d varchar2 := 'prerelease tags are parsed correctly');
+    procedure build(d varchar2 := 'build tags are parsed correctly');
+
+    procedure invalid_version(d varchar2 := 'call to constructor with invalid value throws correct exception');
+
+end;
+/
+create or replace package body ut_semver_version as
+
+    d debug := new debug('semver:test:semver_version');
+
+    type version_test_sample is record(
+        test     varchar2(255),
+        expected integer);
+    type version_test_samples is table of version_test_sample;
+
+    type tags_test_sample is record(
+        test     varchar2(255),
+        expected semver_tags);
+    type tags_test_samples is table of tags_test_sample;
+
+    ----------------------------------------------------------------------------  
+    function tts
+    (
+        test     varchar2,
+        expected semver_tags
+    ) return tags_test_sample is
+        l_result tags_test_sample;
+    begin
+        l_result.test     := test;
+        l_result.expected := expected;
+        return l_result;
+    end;
+
+    ----------------------------------------------------------------------------
+    function vts
+    (
+        test     varchar2,
+        expected integer
+    ) return version_test_sample is
+        l_result version_test_sample;
+    begin
+        l_result.test     := test;
+        l_result.expected := expected;
+        return l_result;
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure major(d varchar2) is
+        l_failed boolean := false;
+        -- NoFormat Start
+        samples version_test_samples := version_test_samples (
+            vts('1.2.3', 1),
+            vts(' 1.2.3 ', 1),
+            vts(' 2.2.3-4 ', 2),
+            vts(' 3.2.3-pre ', 3),
+            vts('v5.2.3', 5),
+            vts(' v8.2.3 ', 8),
+            vts(chr(9) || '13.2.3', 13)
+        );
+        -- NoFormat End
+    begin
+        pete.set_method_description(d);
+        for i in 1 .. samples.count loop
+            begin
+                pete_assert.eq(samples(i).expected,
+                               semver.major(samples(i).test),
+                               'semver.major(''' || samples(i).test || ''') should be ' || samples(i).expected);
+            exception
+                when others then
+                    l_failed := true;
+            end;
+        end loop;
+        pete_assert.this(not l_failed, 'not failed');
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure minor(d varchar2) is
+        l_failed boolean := false;
+        -- NoFormat Start
+        samples version_test_samples := version_test_samples (
+            vts('1.1.3', 1),
+            vts(' 1.1.3 ', 1),
+            vts(' 1.2.3-4 ', 2),
+            vts(' 1.3.3-pre ', 3),
+            vts('v1.5.3', 5),
+            vts(' v1.8.3 ', 8),
+            vts(chr(9) || '1.13.3', 13)
+        );
+        -- NoFormat End
+    begin
+        pete.set_method_description(d);
+        for i in 1 .. samples.count loop
+            begin
+                pete_assert.eq(samples(i).expected,
+                               semver.minor(samples(i).test),
+                               'semver.minor(''' || samples(i).test || ''') should be ' || samples(i).expected);
+            exception
+                when others then
+                    l_failed := true;
+            end;
+        end loop;
+        pete_assert.this(not l_failed, 'not failed');
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure patch(d varchar2) is
+        l_failed boolean := false;
+        -- NoFormat Start
+        samples version_test_samples := version_test_samples (
+            vts('1.2.1', 1),
+            vts(' 1.2.1 ', 1),
+            vts(' 1.2.2-4 ', 2),
+            vts(' 1.2.3-pre ', 3),
+            vts('v1.2.5', 5),
+            vts(' v1.2.8 ', 8),
+            vts(chr(9) || '1.2.13', 13)
+        );
+        -- NoFormat End
+    begin
+        pete.set_method_description(d);
+        for i in 1 .. samples.count loop
+            begin
+                pete_assert.eq(samples(i).expected,
+                               semver.patch(samples(i).test),
+                               'semver.patch(''' || samples(i).test || ''') should be ' || samples(i).expected);
+            exception
+                when others then
+                    l_failed := true;
+            end;
+        end loop;
+        pete_assert.this(not l_failed, 'not failed');
+    end;
+
+    ----------------------------------------------------------------------------      
+    procedure prerelease(d varchar2) is
+        l_failed boolean := false;
+        l_tags   semver_tags;
+        -- NoFormat Start
+        samples tags_test_samples := tags_test_samples(
+            tts('1.2.2-alpha.1', semver_tags('alpha', 1)),
+            tts('0.6.1-1', semver_tags('1')),
+            tts('1.0.0-beta.2', semver_tags('beta','2')),
+            tts('v0.5.4-pre', semver_tags('pre')),
+            tts('1.2.2-alpha.1', semver_tags('alpha','1')),
+            tts('~2.0.0-alpha.1', null),
+            tts('invalid version', null)
+        );
+        -- NoFormat End
+    begin
+        pete.set_method_description(d);
+        for i in 1 .. samples.count loop
+            begin
+                l_tags := semver.prerelease(samples(i).test);
+                if samples(i).expected is null then
+                    if l_tags is not null then
+                        pete_assert.is_null('prerelease tags', 'semver.prerelease(''' || samples(i).test || ''') should be null');
+                    end if;
+                else
+                    for j in 1 .. samples(i).expected.count loop
+                        pete_assert.eq(samples(i).expected(j),
+                                       l_tags(j),
+                                       'semver.prerelease(''' || samples(i).test || ''')(' || j || ') should be ' || samples(i).expected(j));
+                    end loop;
+                end if;
+            exception
+                when others then
+                    l_failed := true;
+                    raise;
+            end;
+        end loop;
+        pete_assert.this(not l_failed, 'not failed');
+    end;
+
+    ----------------------------------------------------------------------------  
+    procedure build(d varchar2) is
+        l_failed boolean := false;
+        l_tags   semver_tags;
+        -- NoFormat Start
+        samples tags_test_samples := tags_test_samples(
+            tts('1.2.2+alpha.1', semver_tags('alpha', 1)),
+            tts('0.6.1+1', semver_tags('1')),
+            tts('1.0.0+beta.2', semver_tags('beta','2')),
+            tts('v0.5.4+pre', semver_tags('pre')),
+            tts('1.2.2+alpha.1', semver_tags('alpha','1')),
+            tts('~2.0.0+alpha.1', null),
+            tts('invalid version', null)
+        );
+        -- NoFormat End
+    begin
+        pete.set_method_description(d);
+        for i in 1 .. samples.count loop
+            begin
+                l_tags := semver.build(samples(i).test);
+                if samples(i).expected is null then
+                    if l_tags is not null then
+                        pete_assert.is_null('build tags', 'semver.build(''' || samples(i).test || ''') should be null');
+                    end if;
+                else
+                    for j in 1 .. samples(i).expected.count loop
+                        pete_assert.eq(samples(i).expected(j),
+                                       l_tags(j),
+                                       'semver.build(''' || samples(i).test || ''')(' || j || ') should be ' || samples(i).expected(j));
+                    end loop;
+                end if;
+            exception
+                when others then
+                    l_failed := true;
+                    raise;
+            end;
+        end loop;
+        pete_assert.this(not l_failed, 'not failed');
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure invalid_version(d varchar2) is
+        -- PLSQL is strongly typed so some of the tests don't make sense
+        type invalid_samples is table of varchar2(270);
+        -- NoFormat Start
+        samples  invalid_samples := invalid_samples(
+            '1.2.3.4', 
+            'NOT VALID', 
+            '1.2', 
+            null, 
+            -- semver.MAX_SAFE_INTEGER + 1 || '.2.3',
+            '1.2.3-' || rpad('x',255,'x')
+            );
+        -- NoFormat End
+        l_failed boolean := false;
+    begin
+        pete.set_method_description(d);
+        for i in 1 .. samples.count loop
+            declare
+                l_version semver_version;
+            begin
+                l_version := semver_version(samples(i));
+                pete_assert.fail('Should have thrown when parsing invalid version: "' || samples(i) || '"');
+            exception
+                when others then
+                    begin
+                        pete_assert.this(sqlcode in (semver.INVALID_VERSION_SQLCODE, semver.VERSION_TOO_LONG_SQLCODE),
+                                         'Correct exception has been raised. Got: ' || sqlerrm);
+                    exception
+                        when others then
+                            l_failed := true;
+                    end;
+            end;
+        end loop;
+        pete_assert.this(not l_failed, 'not failed');
+    end;
+
+end;
+/

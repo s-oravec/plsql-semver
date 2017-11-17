@@ -1,7 +1,5 @@
 create or replace package semver_common as
 
-    MAX_LENGTH constant pls_integer := 256;
-
     subtype typ_regexp_expression is varchar2(4000);
     subtype typ_regexp_modifier is varchar2(30);
     type typ_regexp is record(

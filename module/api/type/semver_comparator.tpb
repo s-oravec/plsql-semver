@@ -7,7 +7,9 @@ create or replace type body semver_comparator as
             return self.operator || self.version.to_string();
         else
             -- semver.ANY = semver_comparator(null, null)
-            return null;
+            -- TODO: fix this somehow
+            -- return '*';
+            return '';
         end if;
     end;
 

@@ -24,3 +24,7 @@ grant execute on semver_tags to public;
 
 prompt .. Granting EXECUTE on semver_version type to PUBLIC
 grant execute on semver_version to public;
+
+prompt .. Granting EXECUTE on semver_versions type to PUBLIC
+grant execute on semver_versions to public;
+

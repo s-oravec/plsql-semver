@@ -11,13 +11,13 @@ create or replace type body semver_version as
     ) return self as result is
     begin
         -- validate
-        if major > semver_version_impl.MAX_SAFE_INTEGER or major < 0 then
+        if major > semver.MAX_SAFE_INTEGER or major < 0 then
             raise_application_error(-20000, 'Invalid major version');
         end if;
-        if minor > semver_version_impl.MAX_SAFE_INTEGER or minor < 0 then
+        if minor > semver.MAX_SAFE_INTEGER or minor < 0 then
             raise_application_error(-20000, 'Invalid minor version');
         end if;
-        if patch > semver_version_impl.MAX_SAFE_INTEGER or patch < 0 then
+        if patch > semver.MAX_SAFE_INTEGER or patch < 0 then
             raise_application_error(-20000, 'Invalid patch version');
         end if;
         --

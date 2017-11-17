@@ -99,8 +99,8 @@ create or replace package body semver_version_impl as
             return semver.COMPARE_RESULT_EQ;
         end if;
         --
-        loop        
-            if l_idx > a_this.prerelease.count and l_idx > a_other.prerelease.count then                
+        loop
+            if l_idx > a_this.prerelease.count and l_idx > a_other.prerelease.count then
                 return semver.COMPARE_RESULT_EQ;
             elsif l_idx > a_other.prerelease.count then
                 return semver.COMPARE_RESULT_GT;
@@ -321,19 +321,9 @@ create or replace package body semver_version_impl as
     ) return boolean is
     begin
         case nvl(a_op, '<null>')
-            when '===' then
-                -- if (typeof a === 'object') a = a.version;
-                -- if (typeof b === 'object') b = b.version;
-                return a_this.format = a_other.format;
-            when '!==' then
-                -- if (typeof a === 'object') a = a.version;
-                -- if (typeof b === 'object') b = b.version;
-                return a_this.format != a_other.format;
             when '<null>' then
                 return eq(a_this, a_other);
             when '=' then
-                return eq(a_this, a_other);
-            when '==' then
                 return eq(a_this, a_other);
             when '!=' then
                 return neq(a_this, a_other);
@@ -352,6 +342,7 @@ create or replace package body semver_version_impl as
 
     ----------------------------------------------------------------------------
     function parse(a_value in varchar2) return semver_version is
+        l_value                 varchar2(1024);
         l_result                semver_version;
         l_semverParts           semver_tags;
         l_fullversionExpression semver_common.typ_regexp_expression := semver_common.src(semver_common.FULLVERSION).expression;
@@ -383,12 +374,16 @@ create or replace package body semver_version_impl as
     
     begin
         d.log('parsing value "' || a_value || '"');
+        -- strip
+        d.log('stripping excesive spaces, v, =');
+        l_value := regexp_replace(a_value, '[[:space:]v=]*(.+)[:space:]*', '\1');
+        d.log('stripped: "' || l_value || '"');
         -- validate
-        if length(a_value) > semver_common.MAX_LENGTH then
-            raise_application_error(-20000, 'Value too long.');
+        if length(l_value) > semver.MAX_LENGTH then
+            semver_util.raise_exception(semver.VERSION_TOO_LONG_SQLCODE, semver.MAX_LENGTH);
         end if;
         --
-        if regexp_like(a_value,
+        if regexp_like(l_value,
                        semver_common.src(semver_common.FULLVERSION).expression,
                        semver_common.src(semver_common.FULLVERSION).modifier) then
             d.log('value satisfies FULLVERSION regexp');
@@ -396,7 +391,7 @@ create or replace package body semver_version_impl as
             select value
               bulk collect
               into l_semverParts
-              from (select regexp_substr(a_value, l_fullversionExpression, 1, 1, l_fullversionModifier, N) as value
+              from (select regexp_substr(l_value, l_fullversionExpression, 1, 1, l_fullversionModifier, N) as value
                       from dual, (select level as N from dual connect by level <= 5))
              where regexp_like(value, '[0-9]+') -- major, minor, patch
                 or value like '-%' -- prerelease
@@ -427,13 +422,13 @@ create or replace package body semver_version_impl as
             --
         else
             d.log('does not satisy FULLVERSION regexp');
-            raise_application_error(-20000, 'Invalid SemVer string "' || a_value || '"');
+            semver_util.raise_exception(semver.INVALID_VERSION_SQLCODE, l_value);
         end if;
         --
     exception
         when others then
             d.log('exception: ' || sqlerrm);
-            raise_application_error(-20000, 'Invalid SemVer string "' || a_value || '"' || chr(10) || sqlerrm);
+            raise;
     end;
 
     ----------------------------------------------------------------------------  
