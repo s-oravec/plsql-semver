@@ -314,10 +314,10 @@ create or replace package body semver_range_parser as
     end;
 
     ----------------------------------------------------------------------------  
-    function match_range return semver_ast_range is
+    function match_ComparatorSet return semver_ast_ComparatorSet is
         l_comparators semver_AstChildren;
     begin
-        d.log('matching range');
+        d.log('matching ComparatorSet');
         -- range ::= hyphen | simple ( ' ' simple ) * | ''
         -- 2. hyphen?
         -- hyphen ::= partial ' - ' partial
@@ -342,7 +342,7 @@ create or replace package body semver_range_parser as
                     if appendToList(match_partial, l_comparators) then
                         -- 2.3.5 return hyphen range
                         d.log('matched hyphen range');
-                        return semver_ast_range.createNew(RANGE_TYPE_HYPHEN, l_comparators);
+                        return semver_ast_ComparatorSet.createNew(RANGE_TYPE_HYPHEN, l_comparators);
                     else
                         semver_token_stream.rollbackSnapshot;
                     end if;
@@ -385,7 +385,7 @@ create or replace package body semver_range_parser as
                 end;
             end loop matchListOfSimpleComparators;
             -- 3.3. return simple-list comparator
-            return semver_ast_range.createNew(RANGE_TYPE_SIMPLE_LIST, l_comparators);
+            return semver_ast_ComparatorSet.createNew(RANGE_TYPE_SIMPLE_LIST, l_comparators);
         exception
             when others then
                 semver_token_stream.rollbackSnapshot;
@@ -399,23 +399,23 @@ create or replace package body semver_range_parser as
                 l_any_comparator := semver_ast_comparator.createNew(semver_range_parser.COMPARATOR_TYPE_PRIMITIVE,
                                                                     '=',
                                                                     semver_ast_partial('*', null, null));
-                return semver_ast_range.createNew(semver_range_parser.RANGE_TYPE_SIMPLE_LIST,
-                                                  semver_astchildren(l_any_comparator.id_registry));
+                return semver_ast_ComparatorSet.createNew(semver_range_parser.RANGE_TYPE_SIMPLE_LIST,
+                                                          semver_astchildren(l_any_comparator.id_registry));
             end;
         end if;
     end;
 
     ----------------------------------------------------------------------------  
-    function match_range_set return semver_ast_rangeset is
+    function match_range return semver_ast_range is
         l_ranges semver_AstChildren := semver_AstChildren();
     begin
         --
-        d.log('matching range_set');
+        d.log('matching range');
         -- range-set ::= range ( logical-or range ) *        
         -- range
         semver_token_stream.takeSnapshot;
-        d.log('try match range');
-        if not appendToList(match_range, l_ranges) then
+        d.log('try match comparator set');
+        if not appendToList(match_ComparatorSet, l_ranges) then
             semver_token_stream.rollbackSnapshot;
             raiseExpectedSymbolNotFound(ast_Range);
         end if;
@@ -430,7 +430,7 @@ create or replace package body semver_range_parser as
             eatSpaces;
             d.log('matching another');
             semver_token_stream.takeSnapshot;
-            if not appendToList(match_range, l_ranges) then
+            if not appendToList(match_ComparatorSet, l_ranges) then
                 semver_token_stream.rollbackSnapshot;
                 raiseExpectedSymbolNotFound(ast_Range);
             end if;
@@ -441,16 +441,16 @@ create or replace package body semver_range_parser as
             d.log('Unexpected token');
             raiseUnexpectedToken;
         else
-            return semver_ast_rangeset.createNew(l_ranges);
+            return semver_ast_range.createNew(l_ranges);
         end if;
         --
     end;
 
     -------------------------------------------
-    function parse return semver_ast_rangeset is
+    function parse return semver_ast_range is
     begin
         d.log('begin parsing');
-        return match_range_set;
+        return match_range;
     end;
 
 end;

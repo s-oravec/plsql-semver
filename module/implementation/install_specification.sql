@@ -49,11 +49,11 @@ prompt .. Creating type SEMVER_AST_PARTIAL
 prompt .. Creating type SEMVER_AST_COMPARATOR
 @@type/semver_ast_comparator.tps;
 
+prompt .. Creating type SEMVER_AST_COMPARATORSET
+@@type/semver_ast_comparatorset.tps;
+
 prompt .. Creating type SEMVER_AST_RANGE
 @@type/semver_ast_range.tps;
-
-prompt .. Creating type SEMVER_AST_RANGESET
-@@type/semver_ast_rangeset.tps;
 
 
 prompt .. Creating package SEMVER_TOKEN_STREAM

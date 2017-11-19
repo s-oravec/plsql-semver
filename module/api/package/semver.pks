@@ -1,10 +1,28 @@
 create or replace package semver as
 
+    /**
+
+    Semantic versioning package for PL/SQL
+
+    */
+
     -- Note: this is the semver.org version of the spec that it implements
     -- Not necessarily the package version of this code.
+
     SEMVER_SPEC_VERSION constant varchar2(10) := '2.0.0';
 
+    /**
+
+    Maximal integer version version component
+
+    */
     MAX_SAFE_INTEGER constant integer := 9007199254740991;
+
+    /**
+
+    Maximal version string length
+
+    */
     MAX_LENGTH       constant pls_integer := 256;
 
     subtype compare_result_type is pls_integer range - 1 .. 1;
@@ -131,14 +149,14 @@ create or replace package semver as
     -- range methods
     ----------------------------------------------------------------------------  
 
-    function parse_range(value in varchar2) return semver_range_set;
+    function parse_range(value in varchar2) return semver_range;
 
     function valid_range(value in varchar2) return varchar2;
 
     function satisfies
     (
-        version   in varchar2,
-        range_set in varchar2
+        version in varchar2,
+        range   in varchar2
     ) return boolean;
 
     function intersects
@@ -149,26 +167,26 @@ create or replace package semver as
 
     function max_satisfying
     (
-        versions  in semver_string_table_type,
-        range_set in varchar2
+        versions in semver_string_table_type,
+        range    in varchar2
     ) return varchar2;
 
     function min_satisfying
     (
-        versions  in semver_string_table_type,
-        range_set in varchar2
+        versions in semver_string_table_type,
+        range    in varchar2
     ) return varchar2;
 
     function gtr
     (
-        version   in varchar2,
-        range_set in varchar2
+        version in varchar2,
+        range   in varchar2
     ) return boolean;
 
     function ltr
     (
-        version   in varchar2,
-        range_set in varchar2
+        version in varchar2,
+        range   in varchar2
     ) return boolean;
 
 end;

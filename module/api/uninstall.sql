@@ -1,11 +1,11 @@
-prompt .. Dropping type SEMVER_RANGE_SET
-drop type semver_range_set force;
-
 prompt .. Dropping type SEMVER_RANGE
 drop type semver_range force;
 
-prompt .. Dropping type SEMVER_RANGES
-drop type semver_ranges force;
+prompt .. Dropping type SEMVER_COMPARATOR_SET
+drop type semver_comparator_set force;
+
+prompt .. Dropping type semver_comparator_sets
+drop type semver_comparator_sets force;
 
 prompt .. Dropping type SEMVER_VERSION
 drop type semver_version force;

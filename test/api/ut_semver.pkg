@@ -54,8 +54,8 @@ create or replace package body ut_semver as
     type ct is table of varchar2(256);
     type rt is table of ct;
     type range_comparators_sample is record(
-        range  varchar2(256),
-        ranges rt);
+        range           varchar2(256),
+        comparator_sets rt);
     type range_comparators_samples is table of range_comparators_sample;
 
     type satisfying_sample is record(
@@ -148,31 +148,33 @@ create or replace package body ut_semver as
     ----------------------------------------------------------------------------
     function rcs
     (
-        range  varchar2,
-        ranges rt
+        range           varchar2,
+        comparator_sets rt
     ) return range_comparators_sample is
         l_result range_comparators_sample;
     begin
-        l_result.range  := range;
-        l_result.ranges := ranges;
+        l_result.range           := range;
+        l_result.comparator_sets := comparator_sets;
         return l_result;
     end;
 
     function rcs_to_string(value in range_comparators_sample) return varchar2 is
-        l_ranges      varchar2(1024);
-        l_comparators varchar2(1024);
+        l_comparator_sets varchar2(1024);
+        l_comparators     varchar2(1024);
     begin
-        for i in 1 .. value.ranges.count loop
+        for i in 1 .. value.comparator_sets.count loop
             l_comparators := '';
-            for j in 1 .. value.ranges(i).count loop
-                l_comparators := l_comparators || semver_util.ternary_varchar2(j = 1,
-                                                                               '''' || value.ranges(i) (j) || '''',
-                                                                               ', ''' || value.ranges(i) (j) || '''');
+            for j in 1 .. value.comparator_sets(i).count loop
+                l_comparators := l_comparators ||
+                                 semver_util.ternary_varchar2(j = 1,
+                                                              '''' || value.comparator_sets(i) (j) || '''',
+                                                              ', ''' || value.comparator_sets(i) (j) || '''');
             end loop;
         
-            l_ranges := l_ranges || semver_util.ternary_varchar2(i = 1, '(' || l_comparators || ')', ', (' || l_comparators || ')');
+            l_comparator_sets := l_comparator_sets ||
+                                 semver_util.ternary_varchar2(i = 1, '(' || l_comparators || ')', ', (' || l_comparators || ')');
         end loop;
-        return '(' || l_ranges || ')';
+        return '(' || l_comparator_sets || ')';
     end;
 
     ----------------------------------------------------------------------------  
@@ -508,7 +510,7 @@ create or replace package body ut_semver as
             rvs('^1.2.3', '1.2.2'),
             rvs('^1.2', '1.1.9'),
             -- requires loose implementation rvs('*', 'v1.2.3-foo', true),
-            -- invalid ranges never satisfied!
+            -- invalid comparator_sets never satisfied!
             rvs('blerg', '1.2.3'),
             -- requires loose implementation rvs('git+https://user:password0123@github.com/foo', '123.0.0', true),
             rvs('^1.2.3', '2.0.0-pre'),
@@ -819,7 +821,7 @@ create or replace package body ut_semver as
 
     ----------------------------------------------------------------------------
     procedure range_to_comparators_test(d varchar2) is
-        l_failed    boolean := false;
+        l_failed boolean := false;
         -- NoFormat Start
         samples range_comparators_samples := range_comparators_samples(
             rcs('1.0.0 - 2.0.0', rt(ct('>=1.0.0', '<=2.0.0'))),
@@ -894,26 +896,26 @@ create or replace package body ut_semver as
             rcs('<*', rt(ct('<0.0.0')))
         );
         -- NoFormat End
-        s           range_comparators_sample;
-        l_range_set semver_range_set;
-        l_msg       varchar2(500);
+        s        range_comparators_sample;
+        l_range  semver_range;
+        l_msg    varchar2(500);
     begin
         pete.set_method_description(d);
         for i in 1 .. samples.count loop
             begin
-                s           := samples(i);
-                l_range_set := semver.parse_range(s.range);
-                l_msg       := 'comparators of ' || l_range_set.to_string() || ' should be ' || rcs_to_string(s);
+                s       := samples(i);
+                l_range := semver.parse_range(s.range);
+                l_msg   := 'comparators of ' || l_range.to_string() || ' should be ' || rcs_to_string(s);
                 --
-                <<semver_ranges_loop>>
-                for i in 1 .. l_range_set.ranges.count loop
+                <<semver_comparator_sets_loop>>
+                for i in 1 .. l_range.comparator_sets.count loop
                     <<semver_comparators_loop>>
-                    for ii in 1 .. l_range_set.ranges(i).comparators.count loop
-                        pete_assert.eq(nvl(s.ranges(i) (ii), '<null>'),
-                                       nvl(l_range_set.ranges(i).comparators(ii).to_string(), '<null>'),
+                    for ii in 1 .. l_range.comparator_sets(i).comparators.count loop
+                        pete_assert.eq(nvl(s.comparator_sets(i) (ii), '<null>'),
+                                       nvl(l_range.comparator_sets(i).comparators(ii).to_string(), '<null>'),
                                        l_msg);
                     end loop semver_comparators_loop;
-                end loop semver_ranges_loop;
+                end loop semver_comparator_sets_loop;
                 --
             exception
                 when others then
@@ -926,7 +928,7 @@ create or replace package body ut_semver as
 
     ----------------------------------------------------------------------------
     procedure max_satisfying(d varchar2) is
-        l_failed    boolean := false;
+        l_failed boolean := false;
         -- NoFormat Start
         samples satisfying_samples := satisfying_samples(
             svs(semver.semver_string_table_type('1.2.3', '1.2.4'), '1.2', '1.2.4'),
@@ -936,9 +938,9 @@ create or replace package body ut_semver as
             -- requires loose implementation (('1.1.0', '1.2.0', '1.2.1', '1.3.0', '2.0.0b1', '2.0.0b2', '2.0.0b3', '2.0.0', '2.1.0'), '~2.0.0', '2.0.0', true)
         );
         -- NoFormat End
-        s           satisfying_sample;
-        l_range_set semver_range_set;
-        l_msg       varchar2(500);
+        s        satisfying_sample;
+        l_range  semver_range;
+        l_msg    varchar2(500);
     
         function string_table_to_string(tab semver.semver_string_table_type) return varchar2 is
             l_result varchar2(512);
@@ -953,10 +955,10 @@ create or replace package body ut_semver as
         pete.set_method_description(d);
         for i in 1 .. samples.count loop
             begin
-                s           := samples(i);
-                l_range_set := semver.parse_range(s.range);
-                l_msg       := 'max satisfying version from ' || string_table_to_string(s.versions) || ' for range ' || s.range ||
-                               ' should be ' || s.result;
+                s       := samples(i);
+                l_range := semver.parse_range(s.range);
+                l_msg   := 'max satisfying version from ' || string_table_to_string(s.versions) || ' for range ' || s.range ||
+                           ' should be ' || s.result;
                 --
                 pete_assert.eq(s.result, semver.max_satisfying(s.versions, s.range), l_msg);
                 --
@@ -971,7 +973,7 @@ create or replace package body ut_semver as
 
     ----------------------------------------------------------------------------
     procedure min_satisfying(d varchar2) is
-        l_failed    boolean := false;
+        l_failed boolean := false;
         -- NoFormat Start
         samples satisfying_samples := satisfying_samples(
             svs(semver.semver_string_table_type('1.2.3', '1.2.4'), '1.2', '1.2.3'),
@@ -981,9 +983,9 @@ create or replace package body ut_semver as
             -- x1 requires loose implementation [['1.1.0', '1.2.0', '1.2.1', '1.3.0', '2.0.0b1', '2.0.0b2', '2.0.0b3', '2.0.0', '2.1.0'], '~2.0.0', '2.0.0', true]
         );
         -- NoFormat End
-        s           satisfying_sample;
-        l_range_set semver_range_set;
-        l_msg       varchar2(500);
+        s        satisfying_sample;
+        l_range  semver_range;
+        l_msg    varchar2(500);
     
         function string_table_to_string(tab semver.semver_string_table_type) return varchar2 is
             l_result varchar2(512);
@@ -998,10 +1000,10 @@ create or replace package body ut_semver as
         pete.set_method_description(d);
         for i in 1 .. samples.count loop
             begin
-                s           := samples(i);
-                l_range_set := semver.parse_range(s.range);
-                l_msg       := 'min satisfying version from ' || string_table_to_string(s.versions) || ' for range ' || s.range ||
-                               ' should be ' || s.result;
+                s       := samples(i);
+                l_range := semver.parse_range(s.range);
+                l_msg   := 'min satisfying version from ' || string_table_to_string(s.versions) || ' for range ' || s.range ||
+                           ' should be ' || s.result;
                 --
                 pete_assert.eq(s.result, semver.min_satisfying(s.versions, s.range), l_msg);
                 --

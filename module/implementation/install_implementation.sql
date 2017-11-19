@@ -13,8 +13,8 @@ prompt .. Creating package body SEMVER_LEXER
 prompt .. Creating package body SEMVER_COMMON
 @@package/semver_common.pkb
 
-prompt .. Creating type body SEMVER_AST_RANGE
-@@type/semver_ast_range.tpb
+prompt .. Creating type body SEMVER_AST_COMPARATORSET
+@@type/semver_ast_comparatorset.tpb
 
 prompt .. Creating package body SEMVER_AST_REGISTRY
 @@package/semver_ast_registry.pkb
@@ -34,8 +34,8 @@ prompt .. Creating package body SEMVER_UTIL
 prompt .. Creating package body SEMVER_RANGE_PARSER
 @@package/semver_range_parser.pkb
 
-prompt .. Creating type body SEMVER_AST_RANGESET
-@@type/semver_ast_rangeset.tpb
+prompt .. Creating type body SEMVER_AST_RANGE
+@@type/semver_ast_range.tpb
 
 prompt .. Creating type body SEMVER_AST_TAGS
 @@type/semver_ast_tags.tpb

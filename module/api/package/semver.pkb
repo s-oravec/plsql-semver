@@ -351,11 +351,11 @@ create or replace package body semver as
     ----------------------------------------------------------------------------  
     function satisfies
     (
-        version   in varchar2,
-        range_set in varchar2
+        version in varchar2,
+        range   in varchar2
     ) return boolean is
     begin
-        return semver_range_impl.satisfies(parse(version), parse_range(range_set));
+        return semver_range_impl.satisfies(parse(version), parse_range(range));
     end;
 
     ----------------------------------------------------------------------------
@@ -364,8 +364,8 @@ create or replace package body semver as
         range1 in varchar2,
         range2 in varchar2
     ) return boolean is
-        l_range1 semver_range_set;
-        l_range2 semver_range_set;
+        l_range1 semver_range;
+        l_range2 semver_range;
     begin
         l_range1 := parse_range(range1);
         l_range2 := parse_range(range2);
@@ -374,14 +374,14 @@ create or replace package body semver as
     end;
 
     ----------------------------------------------------------------------------
-    function parse_range(value in varchar2) return semver_range_set is
-        l_range_set semver_range_set;
+    function parse_range(value in varchar2) return semver_range is
+        l_range semver_range;
     begin
-        l_range_set := semver_range_impl.parse(value);
-        if l_range_set is null then
+        l_range := semver_range_impl.parse(value);
+        if l_range is null then
             return null;
         else
-            return l_range_set;
+            return l_range;
         end if;
     exception
         when others then
@@ -390,11 +390,11 @@ create or replace package body semver as
 
     ----------------------------------------------------------------------------
     function valid_range(value in varchar2) return varchar2 is
-        l_range_set semver_range_set;
+        l_range semver_range;
     begin
-        l_range_set := parse_range(value);
-        if l_range_set is not null then
-            return l_range_set.to_string();
+        l_range := parse_range(value);
+        if l_range is not null then
+            return l_range.to_string();
         else
             return null;
         end if;
@@ -404,12 +404,12 @@ create or replace package body semver as
     function satisfying
     (
         versions           in semver_string_table_type,
-        range_set          in varchar2,
+        range              in varchar2,
         aggregate_function in semver_range_impl.aggregate_function_type
     ) return varchar2 is
-        l_versions  semver_versions;
-        l_range_set semver_range_set;
-        l_result    semver_version;
+        l_versions semver_versions;
+        l_range    semver_range;
+        l_result   semver_version;
     begin
         -- try parse vesions
         if versions is null or versions.count = 0 then
@@ -435,9 +435,9 @@ create or replace package body semver as
             end if;
         end if;
         d.log('try parse range');
-        l_range_set := parse_range(range_set);
-        if l_range_set is not null then
-            l_result := semver_range_impl.satisfying(l_versions, l_range_set, aggregate_function);
+        l_range := parse_range(range);
+        if l_range is not null then
+            l_result := semver_range_impl.satisfying(l_versions, l_range, aggregate_function);
             if l_result is null then
                 d.log('satisfying is null');
                 return null;
@@ -454,60 +454,60 @@ create or replace package body semver as
     ----------------------------------------------------------------------------
     function max_satisfying
     (
-        versions  in semver_string_table_type,
-        range_set in varchar2
+        versions in semver_string_table_type,
+        range    in varchar2
     ) return varchar2 is
     begin
-        return satisfying(versions, range_set, semver_range_impl.FN_MAX);
+        return satisfying(versions, range, semver_range_impl.FN_MAX);
     end;
 
     ----------------------------------------------------------------------------
     function min_satisfying
     (
-        versions  in semver_string_table_type,
-        range_set in varchar2
+        versions in semver_string_table_type,
+        range    in varchar2
     ) return varchar2 is
     begin
-        return satisfying(versions, range_set, semver_range_impl.FN_MIN);
+        return satisfying(versions, range, semver_range_impl.FN_MIN);
     end;
 
     ----------------------------------------------------------------------------  
     function outside
     (
-        a_version   in varchar2,
-        a_range_set in varchar2,
-        a_hilo      in semver_lexer.token_type
+        a_version in varchar2,
+        a_range   in varchar2,
+        a_hilo    in semver_lexer.token_type
     ) return boolean is
-        l_version   semver_version;
-        l_range_set semver_range_set;
+        l_version semver_version;
+        l_range   semver_range;
     begin
-        l_range_set := parse_range(a_range_set);
-        l_version   := parse(a_version);
-        if l_range_set is null or l_version is null then
+        l_range   := parse_range(a_range);
+        l_version := parse(a_version);
+        if l_range is null or l_version is null then
             return false;
         else
-            return semver_range_impl.outside(l_version, l_range_set, a_hilo);
+            return semver_range_impl.outside(l_version, l_range, a_hilo);
         end if;
     end;
 
     ----------------------------------------------------------------------------
     function gtr
     (
-        version   in varchar2,
-        range_set in varchar2
+        version in varchar2,
+        range   in varchar2
     ) return boolean is
     begin
-        return outside(version, range_set, semver_lexer.tk_gt);
+        return outside(version, range, semver_lexer.tk_gt);
     end;
 
     ----------------------------------------------------------------------------  
     function ltr
     (
-        version   in varchar2,
-        range_set in varchar2
+        version in varchar2,
+        range   in varchar2
     ) return boolean is
     begin
-        return outside(version, range_set, semver_lexer.tk_lt);
+        return outside(version, range, semver_lexer.tk_lt);
     end;
 
 end;

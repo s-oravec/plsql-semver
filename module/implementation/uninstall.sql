@@ -49,11 +49,11 @@ drop type semver_ast_partial force;
 prompt .. Dropping type SEMVER_AST_COMPARATOR
 drop type semver_ast_comparator force;
 
+prompt .. Dropping type SEMVER_AST_COMPARATOR_SET
+drop type semver_ast_comparatorset force;
+
 prompt .. Dropping type SEMVER_AST_RANGE
 drop type semver_ast_range force;
-
-prompt .. Dropping type SEMVER_AST_RANGESET
-drop type semver_ast_rangeset force;
 
 
 prompt .. Dropping package SEMVER_TOKEN_STREAM

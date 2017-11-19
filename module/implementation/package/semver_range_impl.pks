@@ -11,40 +11,25 @@ create or replace package semver_range_impl as
     SemVer Range Set string is not valid
     
     */
-    ge_invalid_semver_range_set exception;
+    ge_invalid_semver_range exception;
 
     /**
     
-    Parses passed string into semver_range_set object
+    Parses passed string into semver_range object
     
     %param a_value string value
-    %return parset semver_range_set object
-    %throw ge_invalid_semver_range_set when passed value is not valid SemVer Range Set string
+    %return parset semver_range object
+    %throw ge_invalid_semver_range when passed value is not valid SemVer Range Set string
     
     */
-    function parse(a_value in varchar2) return semver_range_set;
-
-    /**
-    
-    Returns if passed a_version satisfies a_range_set
-    
-    %param a_version SemVer version object
-    %param a_range_set SemVer Range Set object
-    %return true if satisfies else false
-    
-    */
-    function satisfies
-    (
-        a_version   in semver_version,
-        a_range_set in semver_range_set
-    ) return boolean;
+    function parse(a_value in varchar2) return semver_range;
 
     /**
     
     Returns if passed a_version satisfies a_range
     
     %param a_version SemVer version object
-    %param a_range_set SemVer Range object
+    %param a_range SemVer Range Set object
     %return true if satisfies else false
     
     */
@@ -56,17 +41,32 @@ create or replace package semver_range_impl as
 
     /**
     
+    Returns if passed a_version satisfies a_range
+    
+    %param a_version SemVer version object
+    %param a_range SemVer Range object
+    %return true if satisfies else false
+    
+    */
+    function satisfies
+    (
+        a_version        in semver_version,
+        a_comparator_set in semver_comparator_set
+    ) return boolean;
+
+    /**
+    
     Version satisfies at least one Range definition in Rage Set
     
-    %param a_range_set SemVer Range Set object
+    %param a_range SemVer Range Set object
     %param a_version SemVer Version object
     %return result of comparison
     
     */
     function test
     (
-        a_range_set in semver_range_set,
-        a_version   in semver_version
+        a_range   in semver_range,
+        a_version in semver_version
     ) return boolean;
 
     /**
@@ -80,24 +80,24 @@ create or replace package semver_range_impl as
     */
     function test
     (
-        a_range   in semver_range,
-        a_version in semver_version
+        a_comparator_set in semver_comparator_set,
+        a_version        in semver_version
     ) return boolean;
 
     /**
     */
     function intersects
     (
-        a_this  in semver_range,
-        a_other in semver_range
+        a_this  in semver_comparator_set,
+        a_other in semver_comparator_set
     ) return boolean;
 
     /**    
     */
     function intersects
     (
-        a_this  in semver_range_set,
-        a_other in semver_range_set
+        a_this  in semver_range,
+        a_other in semver_range
     ) return boolean;
 
     subtype aggregate_function_type is varchar2(3);
@@ -111,7 +111,7 @@ create or replace package semver_range_impl as
     function satisfying
     (
         a_versions           in semver_versions,
-        a_range_set          in semver_range_set,
+        a_range              in semver_range,
         a_aggregate_function in aggregate_function_type
     ) return semver_version;
 
@@ -122,9 +122,9 @@ create or replace package semver_range_impl as
     */
     function outside
     (
-        a_version   in semver_version,
-        a_range_set in semver_range_set,
-        a_hilo      in semver_lexer.token_type
+        a_version in semver_version,
+        a_range   in semver_range,
+        a_hilo    in semver_lexer.token_type
     ) return boolean;
 
 end;

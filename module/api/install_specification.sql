@@ -13,14 +13,14 @@ prompt .. Creating type SEMVER_COMPARATOR
 prompt .. Creating type SEMVER_COMPARATORS
 @@type/semver_comparators.tps
 
+prompt .. Creating type SEMVER_COMPARATOR_SET
+@@type/semver_comparator_set.tps
+
+prompt .. Creating type SEMVER_COMPARATOR_SETS
+@@type/semver_comparator_sets.tps
+
 prompt .. Creating type SEMVER_RANGE
 @@type/semver_range.tps
-
-prompt .. Creating type SEMVER_RANGES
-@@type/semver_ranges.tps
-
-prompt .. Creating type SEMVER_RANGE_SET
-@@type/semver_range_set.tps
 
 prompt .. Creating package SEMVER
 @@package/semver.pks

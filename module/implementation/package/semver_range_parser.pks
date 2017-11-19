@@ -24,7 +24,7 @@ create or replace package semver_range_parser as
     procedure initialize(a_value in varchar2);
 
     -- parse source lines and return root AST
-    function parse return semver_ast_rangeset;
+    function parse return semver_ast_range;
 
 end;
 /
