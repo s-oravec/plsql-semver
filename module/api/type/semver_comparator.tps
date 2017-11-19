@@ -23,7 +23,9 @@ create or replace type semver_comparator as object
         %return boolean result
         
         */
-    member function intersects(comparator in semver_comparator) return boolean
+    member function intersects(comparator in semver_comparator) return boolean,
+    
+    order member function compare(comparator in semver_comparator) return pls_integer
 )
 ;
 /

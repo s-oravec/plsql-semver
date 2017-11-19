@@ -28,7 +28,7 @@ create or replace type semver_version as object
       -  0 - equal
       -  1 - grater than
     */
-    member function compare(value in semver_version) return pls_integer,
+    order member function compare(value in semver_version) return pls_integer,
 
     member function compareMain(value in semver_version) return pls_integer,
 
@@ -54,25 +54,25 @@ create or replace type semver_version as object
         identifier in varchar2 default null
     ),
 
-    -- TODO: DEPRECATED !!!
+-- TODO: DEPRECATED !!!
     member function gt(value in semver_version) return boolean,
 
-    -- TODO: DEPRECATED !!!
+-- TODO: DEPRECATED !!!
     member function lt(value in semver_version) return boolean,
 
-    -- TODO: DEPRECATED !!!
+-- TODO: DEPRECATED !!!
     member function eq(value in semver_version) return boolean,
 
-    -- TODO: DEPRECATED !!!
+-- TODO: DEPRECATED !!!
     member function neq(value in semver_version) return boolean,
 
-    -- TODO: DEPRECATED !!!
+-- TODO: DEPRECATED !!!
     member function gte(value in semver_version) return boolean,
 
-    -- TODO: DEPRECATED !!!
+-- TODO: DEPRECATED !!!
     member function lte(value in semver_version) return boolean
 
-    --- TODO: implement order function - https://docs.oracle.com/cd/B28359_01/appdev.111/b28371/adobjbas.htm#ADOBJ002
+--- TODO: implement order function - https://docs.oracle.com/cd/B28359_01/appdev.111/b28371/adobjbas.htm#ADOBJ002
 
 )
 ;

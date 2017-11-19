@@ -25,5 +25,11 @@ create or replace type body semver_comparator as
         return semver_comparator_impl.intersects(self, comparator);
     end;
 
+    ----------------------------------------------------------------------------
+    order member function compare(comparator in semver_comparator) return pls_integer is
+    begin
+        return semver_comparator_impl.compare(self, comparator);
+    end;
+
 end;
 /

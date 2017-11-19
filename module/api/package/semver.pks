@@ -159,5 +159,17 @@ create or replace package semver as
         range_set in varchar2
     ) return varchar2;
 
+    function gtr
+    (
+        version   in varchar2,
+        range_set in varchar2
+    ) return boolean;
+
+    function ltr
+    (
+        version   in varchar2,
+        range_set in varchar2
+    ) return boolean;
+
 end;
 /

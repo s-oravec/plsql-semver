@@ -71,7 +71,7 @@ create or replace type body semver_version as
     end;
 
     ----------------------------------------------------------------------------
-    member function compare(value in semver_version) return pls_integer is
+    order member function compare(value in semver_version) return pls_integer is
     begin
         return semver_version_impl.compare(self, value);
     end;

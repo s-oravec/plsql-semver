@@ -1,0 +1,70 @@
+create or replace package ut_semver_clean as
+
+    description constant pete_types.typ_description := 'semver clean';
+
+    procedure clean(d varchar2 := 'Version should be detectable despite extra characters');
+
+end;
+/
+create or replace package body ut_semver_clean as
+
+    type clean_sample is record(
+        value    varchar2(256),
+        expected varchar2(256));
+    type clean_samples is table of clean_sample;
+
+    function cs
+    (
+        value    varchar2,
+        expected varchar2
+    ) return clean_sample is
+        l_result clean_sample;
+    begin
+        l_result.value    := value;
+        l_result.expected := expected;
+        return l_result;
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure clean(d varchar2) is
+        -- NoFormat Start
+        samples clean_samples := clean_samples(
+            cs('1.2.3', '1.2.3'),
+            cs(' 1.2.3 ', '1.2.3'),
+            cs(' 1.2.3-4 ', '1.2.3-4'),
+            cs(' 1.2.3-pre ', '1.2.3-pre'),
+            cs('  =v1.2.3   ', '1.2.3'),
+            cs('v1.2.3', '1.2.3'),
+            cs(' v1.2.3 ', '1.2.3'),
+            cs(chr(9) || '1.2.3', '1.2.3'),
+            cs('>1.2.3', null),
+            cs('~1.2.3', null),
+            cs('<=1.2.3', null),
+            cs('1.2.x', null)
+        );
+        -- NoFormat End
+        s        clean_sample;
+        l_msg    varchar2(500);
+        l_failed boolean;
+    begin
+        pete.set_method_description(d);
+        for i in 1 .. samples.count loop
+            begin
+                s     := samples(i);
+                l_msg := 'semver.clean("' || s.value || '") = "' || s.expected || '"';
+                --
+                pete_assert.eq(s.expected, semver.clean(s.value), l_msg);
+                --
+            exception
+                when others then
+                    dbms_output.put_line(l_msg || ' failed: ' || sqlerrm);
+                    l_failed := true;
+            end;
+        end loop;
+        if l_failed then
+            pete_assert.fail('failed');
+        end if;
+    end;
+
+end;
+/

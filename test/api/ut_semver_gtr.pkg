@@ -1,0 +1,239 @@
+create or replace package ut_semver_gtr as
+
+    description constant pete_types.typ_description := 'semver gtr';
+
+    procedure positive_tests(d varchar2 := 'Version should be greater than range');
+    procedure negative_tests(d varchar2 := 'Version should NOT be greater than range');
+
+end;
+/
+create or replace package body ut_semver_gtr as
+
+    type range_version_sample is record(
+        range   varchar2(256),
+        version varchar2(256),
+        loose   boolean);
+    type range_version_samples is table of range_version_sample;
+
+    ----------------------------------------------------------------------------
+    function rvs
+    (
+        range   varchar2,
+        version varchar2,
+        loose   boolean default false
+    ) return range_version_sample is
+        l_result range_version_sample;
+    begin
+        l_result.range   := range;
+        l_result.version := version;
+        l_result.loose   := loose;
+        return l_result;
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure positive_tests(d varchar2) is
+        l_failed boolean := false;
+        -- NoFormat Start
+        samples range_version_samples := range_version_samples(
+            rvs('~1.2.2', '1.3.0'),
+            rvs('~0.6.1-1', '0.7.1-1'),
+            rvs('1.0.0 - 2.0.0', '2.0.1'),
+            rvs('1.0.0', '1.0.1-beta1'),
+            rvs('1.0.0', '2.0.0'),
+            rvs('<=2.0.0', '2.1.1'),
+            rvs('<=2.0.0', '3.2.9'),
+            rvs('<2.0.0', '2.0.0'),
+            rvs('0.1.20 || 1.2.4', '1.2.5'),
+            rvs('2.x.x', '3.0.0'),
+            rvs('1.2.x', '1.3.0'),
+            rvs('1.2.x || 2.x', '3.0.0'),
+            rvs('2.*.*', '5.0.1'),
+            rvs('1.2.*', '1.3.3'),
+            rvs('1.2.* || 2.*', '4.0.0'),
+            rvs('2', '3.0.0'),
+            rvs('2.3', '2.4.2'),
+            rvs('~2.4', '2.5.0'), -- >=2.4.0 <2.5.0
+            rvs('~2.4', '2.5.5'),
+            rvs('~>3.2.1', '3.3.0'), -- >=3.2.1 <3.3.0
+            rvs('~1', '2.2.3'), -- >=1.0.0 <2.0.0
+            rvs('~>1', '2.2.4'),
+            rvs('~> 1', '3.2.3'),
+            rvs('~1.0', '1.1.2'), -- >=1.0.0 <1.1.0
+            rvs('~ 1.0', '1.1.0'),
+            rvs('<1.2', '1.2.0'),
+            rvs('< 1.2', '1.2.1'),
+            -- needs loose implementation rvs('1', '2.0.0beta', true),
+            rvs('1', '2.0.0-beta'),
+            rvs('~v0.5.4-pre', '0.6.0'),
+            rvs('~v0.5.4-pre', '0.6.1-pre'),
+            rvs('=0.7.x', '0.8.0'),
+            rvs('=0.7.x', '0.8.0-asdf'),
+            rvs('<0.7.x', '0.7.0'),
+            rvs('~1.2.2', '1.3.0'),
+            rvs('1.0.0 - 2.0.0', '2.2.3'),
+            rvs('1.0.0', '1.0.1'),
+            rvs('<=2.0.0', '3.0.0'),
+            rvs('<=2.0.0', '2.9999.9999'),
+            rvs('<=2.0.0', '2.2.9'),
+            rvs('<2.0.0', '2.9999.9999'),
+            rvs('<2.0.0', '2.2.9'),
+            rvs('2.x.x', '3.1.3'),
+            rvs('1.2.x', '1.3.3'),
+            rvs('1.2.x || 2.x', '3.1.3'),
+            rvs('2.*.*', '3.1.3'),
+            rvs('1.2.*', '1.3.3'),
+            rvs('1.2.* || 2.*', '3.1.3'),
+            rvs('2', '3.1.2'),
+            rvs('2.3', '2.4.1'),
+            rvs('~2.4', '2.5.0'), -- >=2.4.0 <2.5.0
+            rvs('~>3.2.1', '3.3.2'), -- >=3.2.1 <3.3.0
+            rvs('~1', '2.2.3'), -- >=1.0.0 <2.0.0
+            rvs('~>1', '2.2.3'),
+            rvs('~1.0', '1.1.0'), -- >=1.0.0 <1.1.0
+            rvs('<1', '1.0.0'),
+            -- needs loose implementation rvs('1', '2.0.0beta', true),
+            -- needs loose implementation rvs('<1', '1.0.0beta', true),
+            -- needs loose implementation rvs('< 1', '1.0.0beta', true),
+            rvs('1', '2.0.0-beta'),
+            rvs('<1', '1.0.0-beta'),
+            rvs('< 1', '1.0.0-beta'),
+            rvs('=0.7.x', '0.8.2'),
+            rvs('<0.7.x', '0.7.2')
+        );
+        -- NoFormat End
+        l_msg    varchar2(512);
+        s        range_version_sample;
+    begin
+        pete.set_method_description(d);
+        for i in 1 .. samples.count loop
+            begin
+                s     := samples(i);
+                l_msg := 'gtr("' || s.version || '","' || s.range || '") should be true';
+                 -- NoFormat Start
+                  pete_assert.this(
+                      semver.gtr(samples(i).version, samples(i).range),
+                      l_msg
+                  );
+                -- NoFormat End
+            exception
+                when others then
+                    dbms_output.put_line(l_msg || ' failed: ' || sqlerrm);
+                    l_failed := true;
+            end;
+        end loop;
+        pete_assert.this(not l_failed, 'failed');
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure negative_tests(d varchar2) is
+        l_failed boolean := false;
+        -- NoFormat Start
+        samples range_version_samples := range_version_samples(
+            rvs('~0.6.1-1', '0.6.1-1'),
+            rvs('1.0.0 - 2.0.0', '1.2.3'),
+            rvs('1.0.0 - 2.0.0', '0.9.9'),
+            rvs('1.0.0', '1.0.0'),
+            rvs('>=*', '0.2.4'),
+            -- needs loose implementation rvs('', '1.0.0', true),
+            rvs('*', '1.2.3'),
+            rvs('*', 'v1.2.3-foo'),
+            rvs('>=1.0.0', '1.0.0'),
+            rvs('>=1.0.0', '1.0.1'),
+            rvs('>=1.0.0', '1.1.0'),
+            rvs('>1.0.0', '1.0.1'),
+            rvs('>1.0.0', '1.1.0'),
+            rvs('<=2.0.0', '2.0.0'),
+            rvs('<=2.0.0', '1.9999.9999'),
+            rvs('<=2.0.0', '0.2.9'),
+            rvs('<2.0.0', '1.9999.9999'),
+            rvs('<2.0.0', '0.2.9'),
+            rvs('>= 1.0.0', '1.0.0'),
+            rvs('>=  1.0.0', '1.0.1'),
+            rvs('>=   1.0.0', '1.1.0'),
+            rvs('> 1.0.0', '1.0.1'),
+            rvs('>  1.0.0', '1.1.0'),
+            rvs('<=   2.0.0', '2.0.0'),
+            rvs('<= 2.0.0', '1.9999.9999'),
+            rvs('<=  2.0.0', '0.2.9'),
+            rvs('<    2.0.0', '1.9999.9999'),
+            rvs('<'|| chr(9) ||'.0.0', '0.2.9'),
+            rvs('>=0.1.97', 'v0.1.97'),
+            rvs('>=0.1.97', '0.1.97'),
+            rvs('0.1.20 || 1.2.4', '1.2.4'),
+            rvs('0.1.20 || >1.2.4', '1.2.4'),
+            rvs('0.1.20 || 1.2.4', '1.2.3'),
+            rvs('0.1.20 || 1.2.4', '0.1.20'),
+            rvs('>=0.2.3 || <0.0.1', '0.0.0'),
+            rvs('>=0.2.3 || <0.0.1', '0.2.3'),
+            rvs('>=0.2.3 || <0.0.1', '0.2.4'),
+            rvs('||', '1.3.4'),
+            rvs('2.x.x', '2.1.3'),
+            rvs('1.2.x', '1.2.3'),
+            rvs('1.2.x || 2.x', '2.1.3'),
+            rvs('1.2.x || 2.x', '1.2.3'),
+            rvs('x', '1.2.3'),
+            rvs('2.*.*', '2.1.3'),
+            rvs('1.2.*', '1.2.3'),
+            rvs('1.2.* || 2.*', '2.1.3'),
+            rvs('1.2.* || 2.*', '1.2.3'),
+            rvs('1.2.* || 2.*', '1.2.3'),
+            rvs('*', '1.2.3'),
+            rvs('2', '2.1.2'),
+            rvs('2.3', '2.3.1'),
+            rvs('~2.4', '2.4.0'), -- >=2.4.0 <2.5.0
+            rvs('~2.4', '2.4.5'),
+            rvs('~>3.2.1', '3.2.2'), -- >=3.2.1 <3.3.0
+            rvs('~1', '1.2.3'), -- >=1.0.0 <2.0.0
+            rvs('~>1', '1.2.3'),
+            rvs('~> 1', '1.2.3'),
+            rvs('~1.0', '1.0.2'), -- >=1.0.0 <1.1.0
+            rvs('~ 1.0', '1.0.2'),
+            rvs('>=1', '1.0.0'),
+            rvs('>= 1', '1.0.0'),
+            rvs('<1.2', '1.1.1'),
+            rvs('< 1.2', '1.1.1'),
+            -- needs rvs('1', '1.0.0beta', true),
+            rvs('~v0.5.4-pre', '0.5.5'),
+            rvs('~v0.5.4-pre', '0.5.4'),
+            rvs('=0.7.x', '0.7.2'),
+            rvs('>=0.7.x', '0.7.2'),
+            rvs('=0.7.x', '0.7.0-asdf'),
+            rvs('>=0.7.x', '0.7.0-asdf'),
+            rvs('<=0.7.x', '0.6.2'),
+            rvs('>0.2.3 >0.2.4 <=0.2.5', '0.2.5'),
+            rvs('>=0.2.3 <=0.2.4', '0.2.4'),
+            rvs('1.0.0 - 2.0.0', '2.0.0'),
+            rvs('^1', '0.0.0-0'),
+            rvs('^3.0.0', '2.0.0'),
+            rvs('^1.0.0 || ~2.0.1', '2.0.0'),
+            rvs('^0.1.0 || ~3.0.1 || 5.0.0', '3.2.0'),
+            -- needs loose implementation rvs('^0.1.0 || ~3.0.1 || 5.0.0', '1.0.0beta', true),
+            -- needs loose implementation rvs('^0.1.0 || ~3.0.1 || 5.0.0', '5.0.0-0', true),
+            rvs('^0.1.0 || ~3.0.1 || >4 <=5.0.0', '3.5.0')
+        );
+        -- NoFormat End
+        l_msg    varchar2(512);
+        s        range_version_sample;
+    begin
+        pete.set_method_description(d);
+        for i in 1 .. samples.count loop
+            begin
+                s     := samples(i);
+                l_msg := 'gtr("' || s.version || '","' || s.range || '") should NOT be true';
+                 -- NoFormat Start
+                  pete_assert.this(
+                      not semver.gtr(samples(i).version, samples(i).range),
+                      l_msg
+                  );
+                -- NoFormat End
+            exception
+                when others then
+                    dbms_output.put_line(l_msg || ' failed: ' || sqlerrm);
+                    l_failed := true;
+            end;
+        end loop;
+        pete_assert.this(not l_failed, 'failed');
+    end;
+
+end;
+/

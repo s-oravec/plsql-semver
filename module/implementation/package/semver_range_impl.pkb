@@ -190,5 +190,127 @@ create or replace package body semver_range_impl as
         return l_selected;
     end;
 
+    ----------------------------------------------------------------------------
+    function outside
+    (
+        a_version   in semver_version,
+        a_range_set in semver_range_set,
+        a_hilo      in semver_lexer.token_type
+    ) return boolean is
+        l_comp  semver_lexer.token_type;
+        l_ecomp semver_lexer.token_type;
+    
+        function gtfn
+        (
+            a_this in semver_version,
+            a_that in semver_version
+        ) return boolean is
+        begin
+            if a_hilo = semver_lexer.tk_gt then
+                return semver_version_impl.gt(a_this, a_that);
+            else
+                return semver_version_impl.lt(a_this, a_that);
+            end if;
+        end;
+    
+        function ltfn
+        (
+            a_this in semver_version,
+            a_that in semver_version
+        ) return boolean is
+        begin
+            if a_hilo = semver_lexer.tk_gt then
+                return semver_version_impl.lt(a_this, a_that);
+            else
+                return semver_version_impl.gt(a_this, a_that);
+            end if;
+        end;
+    
+        function ltefn
+        (
+            a_this in semver_version,
+            a_that in semver_version
+        ) return boolean is
+        begin
+            if a_hilo = semver_lexer.tk_gt then
+                return semver_version_impl.lte(a_this, a_that);
+            else
+                return semver_version_impl.gte(a_this, a_that);
+            end if;
+        end;
+    
+    begin
+        d.log('outside hilo: "' || a_hilo || '" version: "' || a_version.to_string() || '" range: "' || a_range_set.to_string() || '"');
+    
+        d.log('checking hilo');
+        case (a_hilo)
+            when '>' then
+                l_comp  := '>';
+                l_ecomp := '>=';
+            when '<' then
+                l_comp  := '<';
+                l_ecomp := '<=';
+            else
+                raise_application_error(-20000, 'Must provide a hilo val of "<" or ">"');
+        end case;
+        -- 
+        if satisfies(a_version, a_range_set) then
+            d.log('it satisifes the range it is not outside');
+            return false;
+        end if;
+        --
+        -- From now on, variable terms are as if we're in "gtr" mode.
+        -- but note that everything is flipped for the "ltr" function.
+        for i in 1 .. a_range_set.ranges.count loop
+            declare
+                l_high       semver_comparator;
+                l_low        semver_comparator;
+                l_comparator semver_comparator;
+            begin
+                d.log('determine least and greatest comparators');
+                for j in 1 .. a_range_set.ranges(i).comparators.count loop
+                    l_comparator := a_range_set.ranges(i).comparators(j);
+                    if l_comparator.version is null then
+                        l_comparator := new semver_comparator('>=', semver_version(0, 0, 0));
+                    end if;
+                    l_high := nvl(l_high, l_comparator);
+                    l_low  := nvl(l_low, l_comparator);
+                
+                    if (gtfn(l_comparator.version, l_high.version)) then
+                        l_high := l_comparator;
+                    elsif ltfn(l_comparator.version, l_low.version) then
+                        l_low := l_comparator;
+                    end if;
+                end loop;
+                d.log('low "' || l_low.to_string() || '"');
+                d.log('high "' || l_high.to_string() || '"');
+                --
+                -- If the edge version comparator has a > || >= operator then our version
+                -- isn't outside it
+                if l_high.operator = l_comp or l_high.operator = l_ecomp then
+                    d.log('edge version comparator has a > or >= operator then our version is not outside it');
+                    d.log('version is not outside range from ' || a_hilo);
+                    return false;
+                end if;
+                --
+                -- If the lowest version comparator has an operator and our version
+                -- is less than it then it isn't higher than the range
+                if (l_low.operator is null or l_low.operator = l_comp) and ltefn(a_version, l_low.version) then
+                    d.log('(l_low.operator is null or l_low.operator = l_comp) and ltefn(a_version, l_low.version)');
+                    d.log('version is not outside range from ' || a_hilo);
+                    return false;
+                elsif l_low.operator = l_ecomp and ltfn(a_version, l_low.version) then
+                    d.log('l_low.operator = l_ecomp and ltfn(a_version, l_low.version)');
+                    d.log('version is not outside range from ' || a_hilo);
+                    return false;
+                end if;
+            end;
+        end loop;
+        --
+        d.log('version outside range from ' || a_hilo);
+        return true;
+        --    
+    end;
+
 end;
 /

@@ -1,5 +1,7 @@
 set serveroutput on size unlimited
 
+clear screen
+
 prompt .. Resetting packages
 exec dbms_session.reset_package;
 

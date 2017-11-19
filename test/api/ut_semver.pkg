@@ -240,7 +240,7 @@ create or replace package body ut_semver as
                     l_failed := true;
             end;
         end loop;
-        pete_assert.this(not l_failed, 'not failed');
+        pete_assert.this(not l_failed, 'failed');
     end;
 
     ----------------------------------------------------------------------------
@@ -306,7 +306,7 @@ create or replace package body ut_semver as
                     l_failed := true;
             end;
         end loop;
-        pete_assert.this(not l_failed, 'not failed');
+        pete_assert.this(not l_failed, 'failed');
     end;
 
     ----------------------------------------------------------------------------
@@ -435,7 +435,7 @@ create or replace package body ut_semver as
                                          'sqlerrm: ' || sqlerrm);
             end;
         end loop;
-        pete_assert.this(not l_failed, 'not failed');
+        pete_assert.this(not l_failed, 'failed');
     end;
 
     ----------------------------------------------------------------------------
@@ -530,7 +530,7 @@ create or replace package body ut_semver as
                     l_failed := true;
             end;
         end loop;
-        pete_assert.this(not l_failed, 'not failed');
+        pete_assert.this(not l_failed, 'failed');
     end;
 
     ----------------------------------------------------------------------------
@@ -668,7 +668,7 @@ create or replace package body ut_semver as
                     l_failed := true;
             end;
         end loop;
-        pete_assert.this(not l_failed, 'not failed');
+        pete_assert.this(not l_failed, 'failed');
     end;
 
     ----------------------------------------------------------------------------
@@ -711,7 +711,7 @@ create or replace package body ut_semver as
                     l_failed := true;
             end;
         end loop;
-        pete_assert.this(not l_failed, 'not failed');
+        pete_assert.this(not l_failed, 'failed');
     end;
 
     ----------------------------------------------------------------------------
@@ -814,7 +814,7 @@ create or replace package body ut_semver as
                     l_failed := true;
             end;
         end loop;
-        pete_assert.this(not l_failed, 'not failed');
+        pete_assert.this(not l_failed, 'failed');
     end;
 
     ----------------------------------------------------------------------------
@@ -921,7 +921,7 @@ create or replace package body ut_semver as
                     l_failed := true;
             end;
         end loop;
-        pete_assert.this(not l_failed, 'not failed');
+        pete_assert.this(not l_failed, 'failed');
     end;
 
     ----------------------------------------------------------------------------
@@ -964,12 +964,9 @@ create or replace package body ut_semver as
                 when others then
                     dbms_output.put_line(l_msg || ' failed: ' || sqlerrm);
                     l_failed := true;
-                    raise;
             end;
         end loop;
-        if l_failed then
-            pete_assert.fail('failed');
-        end if;
+        pete_assert.this(not l_failed, 'failed');
     end;
 
     ----------------------------------------------------------------------------
@@ -1012,12 +1009,9 @@ create or replace package body ut_semver as
                 when others then
                     dbms_output.put_line(l_msg || ' failed: ' || sqlerrm);
                     l_failed := true;
-                    raise;
             end;
         end loop;
-        if l_failed then
-            pete_assert.fail('failed');
-        end if;
+        pete_assert.this(not l_failed, 'failed');
     end;
 
 end;

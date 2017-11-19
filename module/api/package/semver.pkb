@@ -471,17 +471,44 @@ create or replace package body semver as
         return satisfying(versions, range_set, semver_range_impl.FN_MIN);
     end;
 
-----------------------------------------------------------------------------  
-/*    function format_range(value in varchar2) return varchar2 is
+    ----------------------------------------------------------------------------  
+    function outside
+    (
+        a_version   in varchar2,
+        a_range_set in varchar2,
+        a_hilo      in semver_lexer.token_type
+    ) return boolean is
+        l_version   semver_version;
         l_range_set semver_range_set;
     begin
-        l_range_set := parse_range(value);
-        if l_range_set is not null then
-            return l_range_set.to_string();
+        l_range_set := parse_range(a_range_set);
+        l_version   := parse(a_version);
+        if l_range_set is null or l_version is null then
+            return false;
         else
-            return null;
+            return semver_range_impl.outside(l_version, l_range_set, a_hilo);
         end if;
-    end;*/
+    end;
+
+    ----------------------------------------------------------------------------
+    function gtr
+    (
+        version   in varchar2,
+        range_set in varchar2
+    ) return boolean is
+    begin
+        return outside(version, range_set, semver_lexer.tk_gt);
+    end;
+
+    ----------------------------------------------------------------------------  
+    function ltr
+    (
+        version   in varchar2,
+        range_set in varchar2
+    ) return boolean is
+    begin
+        return outside(version, range_set, semver_lexer.tk_lt);
+    end;
 
 end;
 /

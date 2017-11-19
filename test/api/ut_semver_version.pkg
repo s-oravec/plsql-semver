@@ -1,6 +1,6 @@
 create or replace package ut_semver_version as
 
-    description constant pete_types.typ_description := 'semver_version';
+    description constant pete_types.typ_description := 'semver version';
 
     procedure major(d varchar2 := 'major version should be detectable despite extra characters');
     procedure minor(d varchar2 := 'minor version should be detectable despite extra characters');
@@ -152,6 +152,7 @@ create or replace package body ut_semver_version as
             tts('v0.5.4-pre', semver_tags('pre')),
             tts('1.2.2-alpha.1', semver_tags('alpha','1')),
             tts('~2.0.0-alpha.1', null),
+            tts('1.0.0', null),
             tts('invalid version', null)
         );
         -- NoFormat End

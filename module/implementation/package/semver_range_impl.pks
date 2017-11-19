@@ -115,5 +115,17 @@ create or replace package semver_range_impl as
         a_aggregate_function in aggregate_function_type
     ) return semver_version;
 
+    /**
+    
+    version is outside of range - lower or higher
+    
+    */
+    function outside
+    (
+        a_version   in semver_version,
+        a_range_set in semver_range_set,
+        a_hilo      in semver_lexer.token_type
+    ) return boolean;
+
 end;
 /

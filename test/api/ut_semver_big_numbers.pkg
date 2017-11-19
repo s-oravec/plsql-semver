@@ -1,0 +1,64 @@
+create or replace package ut_semver_big_numbers as
+
+    description constant pete_types.typ_description := 'semver big numbers';
+
+    procedure long_version(d varchar2 := 'long version is too long');
+    procedure big_number(d varchar2 := 'big number is like too long version');
+    procedure parsing_null(d varchar2 := 'parsing null does not throw');
+
+end;
+/
+create or replace package body ut_semver_big_numbers as
+
+    ----------------------------------------------------------------------------
+    procedure long_version(d varchar2) is
+        l_value   varchar2(512) := '1.2.' || rpad('3', 256, '3');
+        l_version semver_version;
+        l_throws  boolean;
+    begin
+        pete.set_method_description(d);
+        begin
+            l_version := new semver_version(l_value);
+            l_throws  := false;
+        exception
+            when others then
+                l_throws := true;
+        end;
+        pete_assert.this(l_throws, 'Should have thrown');
+        --
+        pete_assert.is_null(semver.valid(l_value));
+        pete_assert.is_null(semver.inc(l_value, 'patch'));
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure big_number(d varchar2) is
+        l_value   varchar2(512) := '1.2.' || rpad('3', 100, '3');
+        l_version semver_version;
+        l_throws  boolean;
+    begin
+        pete.set_method_description(d);
+        begin
+            l_version := new semver_version(l_value);
+            l_throws  := false;
+        exception
+            when others then
+                l_throws := true;
+        end;
+        pete_assert.this(l_throws, 'Should have thrown');
+        --
+        pete_assert.is_null(semver.valid(l_value));
+        pete_assert.is_null(semver.inc(l_value, 'patch'));
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure parsing_null(d varchar2) is
+        l_semver_version semver_version;
+    begin
+        pete.set_method_description(d);
+        pete_assert.this(semver.parse(null) is null);
+        l_semver_version := new semver_version('1.2.3');
+        pete_assert.eq(l_semver_version.to_string(), '1.2.3');
+    end;
+
+end;
+/

@@ -237,6 +237,9 @@ create or replace type body semver_ast_comparator as
                 append_result(semver_comparator('>=', semver_version(l_major, l_minor, 0)));
                 append_result(semver_comparator('<', semver_version(l_major, l_minor + 1, 0)));
             else
+                if l_gtlt = '=' then
+                    l_gtlt := '';
+                end if;
                 append_result(semver_comparator(l_gtlt, semver_version(l_major, l_minor, l_patch)));
             end if;
             --

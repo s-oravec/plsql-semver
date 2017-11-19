@@ -2,6 +2,9 @@ create or replace package body semver_comparator_impl as
 
     d debug := new debug('semver:comparator');
 
+    type operator_to_order_map is table of pls_integer index by varchar2(2);
+    g_operator_order_map operator_to_order_map;
+
     ----------------------------------------------------------------------------
     function test
     (
@@ -68,5 +71,58 @@ create or replace package body semver_comparator_impl as
         -- NoFormat End
     end;
 
+    ----------------------------------------------------------------------------
+    function compare
+    (
+        a_this  in semver_comparator,
+        a_other in semver_comparator
+    ) return semver.compare_result_type is
+        l_compare_versions semver.compare_result_type;
+    begin
+        if a_other is null then
+            return null;
+        end if;
+        -- at least one is ANY
+        if a_this.version is null and a_other.version is null then
+            -- * = *
+            return semver.COMPARE_RESULT_EQ;
+        elsif a_this.version is null and a_other.version is not null then
+            -- * > any other version
+            return semver.COMPARE_RESULT_GT;
+        elsif a_this.version is not null and a_other.version is null then
+            -- some other version < *
+            return semver.COMPARE_RESULT_LT;
+        else
+            -- compare versions
+            l_compare_versions := semver_version_impl.compare(a_this.version, a_other.version);
+            if l_compare_versions = semver.COMPARE_RESULT_EQ then
+                -- compare operators
+                if a_this.operator = a_other.operator then
+                    return semver.COMPARE_RESULT_EQ;
+                else
+                    if g_operator_order_map(a_this.operator) > g_operator_order_map(a_other.operator) then
+                        return semver.COMPARE_RESULT_GT;
+                    else
+                        return semver.COMPARE_RESULT_LT;
+                    end if;
+                end if;
+            else
+                return l_compare_versions;
+            end if;
+        end if;
+    end;
+
+begin
+    --     < <=  = >=  >
+    -- <   =  <  <  <  <
+    -- <=  >  =  <  <  <
+    -- =   >  >  =  <  <
+    -- >=  >  >  >  =  <
+    -- >   >  >  >  >  =                
+    g_operator_order_map('<') := 1;
+    g_operator_order_map('<=') := 2;
+    g_operator_order_map('=') := 3;
+    g_operator_order_map('>=') := 4;
+    g_operator_order_map('>') := 5;
 end;
 /

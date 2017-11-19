@@ -36,5 +36,11 @@ create or replace package semver_comparator_impl as
         a_other in semver_comparator
     ) return boolean;
 
+    function compare
+    (
+        a_this  in semver_comparator,
+        a_other in semver_comparator
+    ) return semver.compare_result_type;
+
 end;
 /
