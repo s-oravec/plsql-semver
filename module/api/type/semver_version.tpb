@@ -32,11 +32,11 @@ create or replace type body semver_version as
     end;
 
     ----------------------------------------------------------------------------  
-    constructor function semver_version(value in varchar2) return self as result is
+    constructor function semver_version(version in varchar2) return self as result is
         l_version semver_version;
     begin
         -- parse semver string
-        l_version := semver_version_impl.parse(value);
+        l_version := semver_version_impl.parse(version);
         -- fill attributes
         self.major      := l_version.major;
         self.minor      := l_version.minor;
@@ -65,64 +65,64 @@ create or replace type body semver_version as
     end;
 
     ----------------------------------------------------------------------------
-    member function format return varchar2 is
+    /*member function format return varchar2 is
     begin
         return semver_version_impl.to_string(self);
+    end;*/
+
+    ----------------------------------------------------------------------------
+    order member function compare(version in semver_version) return pls_integer is
+    begin
+        return semver_version_impl.compare(self, version);
     end;
 
     ----------------------------------------------------------------------------
-    order member function compare(value in semver_version) return pls_integer is
+    member function compareMain(version in semver_version) return pls_integer is
     begin
-        return semver_version_impl.compare(self, value);
+        return semver_version_impl.compareMain(self, version);
     end;
 
     ----------------------------------------------------------------------------
-    member function compareMain(value in semver_version) return pls_integer is
+    member function comparePrerelease(version in semver_version) return pls_integer is
     begin
-        return semver_version_impl.compareMain(self, value);
+        return semver_version_impl.compareMain(self, version);
     end;
 
     ----------------------------------------------------------------------------
-    member function comparePrerelease(value in semver_version) return pls_integer is
+    /*member function gt(version in semver_version) return boolean is
     begin
-        return semver_version_impl.compareMain(self, value);
-    end;
+        return semver_version_impl.gt(self, version);
+    end;*/
 
     ----------------------------------------------------------------------------
-    member function gt(value in semver_version) return boolean is
+    /*member function lt(version in semver_version) return boolean is
     begin
-        return semver_version_impl.gt(self, value);
-    end;
+        return semver_version_impl.lt(self, version);
+    end;*/
 
     ----------------------------------------------------------------------------
-    member function lt(value in semver_version) return boolean is
+    /*member function eq(version in semver_version) return boolean is
     begin
-        return semver_version_impl.lt(self, value);
-    end;
+        return semver_version_impl.eq(self, version);
+    end;*/
 
     ----------------------------------------------------------------------------
-    member function eq(value in semver_version) return boolean is
+    /*member function neq(version in semver_version) return boolean is
     begin
-        return semver_version_impl.eq(self, value);
-    end;
+        return semver_version_impl.neq(self, version);
+    end;*/
 
     ----------------------------------------------------------------------------
-    member function neq(value in semver_version) return boolean is
+    /*member function gte(version in semver_version) return boolean is
     begin
-        return semver_version_impl.neq(self, value);
-    end;
+        return semver_version_impl.gte(self, version);
+    end;*/
 
     ----------------------------------------------------------------------------
-    member function gte(value in semver_version) return boolean is
+    /*member function lte(version in semver_version) return boolean is
     begin
-        return semver_version_impl.gte(self, value);
-    end;
-
-    ----------------------------------------------------------------------------
-    member function lte(value in semver_version) return boolean is
-    begin
-        return semver_version_impl.lte(self, value);
-    end;
+        return semver_version_impl.lte(self, version);
+    end;*/
 
 end;
 /

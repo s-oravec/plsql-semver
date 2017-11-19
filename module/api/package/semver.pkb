@@ -3,12 +3,9 @@ create or replace package body semver as
     d debug := new debug('semver');
 
     ----------------------------------------------------------------------------
-    function parse(value in varchar2) return semver_version is
+    function parse(version in varchar2) return semver_version is
     begin
-        if length(value) > semver.MAX_LENGTH then
-            return null;
-        end if;
-        return semver_version(value);
+        return semver_version_impl.parse(version);
     exception
         when others then
             return null;
@@ -19,7 +16,7 @@ create or replace package body semver as
     (
         version1 in varchar2,
         version2 in varchar2
-    ) return varchar2 is
+    ) return release_type is
     begin
         if version1 = version2 then
             return null;
@@ -28,25 +25,28 @@ create or replace package body semver as
                 l_this  semver_version := parse(version1);
                 l_other semver_version := parse(version2);
             begin
+                if l_this = l_other then
+                    return null;
+                end if;
                 if (l_this.prerelease is not null and l_this.prerelease.count > 0) or
                    (l_other.prerelease is not null and l_other.prerelease.count > 0) then
                     if l_this.major != l_other.major then
-                        return 'premajor';
+                        return semver.RELEASE_PREMAJOR;
                     elsif l_this.minor != l_other.minor then
-                        return 'preminor';
+                        return semver.RELEASE_PREMINOR;
                     elsif l_this.patch != l_other.patch then
-                        return 'prepatch';
+                        return semver.RELEASE_PREPATCH;
                     else
-                        return 'prerelease';
+                        return semver.RELEASE_PRERELEASE;
                     end if;
                 end if;
             
                 if l_this.major != l_other.major then
-                    return 'major';
+                    return semver.RELEASE_MAJOR;
                 elsif l_this.minor != l_other.minor then
-                    return 'minor';
+                    return semver.RELEASE_MINOR;
                 elsif l_this.patch != l_other.patch then
-                    return 'patch';
+                    return semver.RELEASE_PATCH;
                 else
                     raise_application_error(-20000, 'Wait what?');
                 end if;
@@ -55,10 +55,10 @@ create or replace package body semver as
     end;
 
     ----------------------------------------------------------------------------
-    function major(value in varchar2) return pls_integer is
+    function major(version in varchar2) return pls_integer is
         l_this semver_version;
     begin
-        l_this := parse(value);
+        l_this := parse(version);
         if l_this is not null then
             return l_this.major;
         else
@@ -67,10 +67,10 @@ create or replace package body semver as
     end;
 
     ----------------------------------------------------------------------------
-    function minor(value in varchar2) return pls_integer is
+    function minor(version in varchar2) return pls_integer is
         l_this semver_version;
     begin
-        l_this := parse(value);
+        l_this := parse(version);
         if l_this is not null then
             return l_this.minor;
         else
@@ -79,10 +79,10 @@ create or replace package body semver as
     end;
 
     ----------------------------------------------------------------------------
-    function patch(value in varchar2) return pls_integer is
+    function patch(version in varchar2) return pls_integer is
         l_this semver_version;
     begin
-        l_this := parse(value);
+        l_this := parse(version);
         if l_this is not null then
             return l_this.patch;
         else
@@ -91,10 +91,10 @@ create or replace package body semver as
     end;
 
     ----------------------------------------------------------------------------
-    function prerelease(value in varchar2) return semver_tags is
+    function prerelease(version in varchar2) return semver_tags is
         l_this semver_version;
     begin
-        l_this := parse(value);
+        l_this := parse(version);
         if l_this is not null then
             return l_this.prerelease;
         else
@@ -103,10 +103,10 @@ create or replace package body semver as
     end;
 
     ----------------------------------------------------------------------------
-    function build(value in varchar2) return semver_tags is
+    function build(version in varchar2) return semver_tags is
         l_this semver_version;
     begin
-        l_this := parse(value);
+        l_this := parse(version);
         if l_this is not null then
             return l_this.build;
         else
@@ -124,6 +124,18 @@ create or replace package body semver as
         l_other semver_version := parse(version2);
     begin
         return l_this.compare(l_other);
+    end;
+
+    ----------------------------------------------------------------------------
+    function rcompare
+    (
+        version1 in varchar2,
+        version2 in varchar2
+    ) return compare_result_type is
+        l_this  semver_version := parse(version1);
+        l_other semver_version := parse(version2);
+    begin
+        return l_other.compare(l_this);
     end;
 
     ----------------------------------------------------------------------------
@@ -306,25 +318,25 @@ create or replace package body semver as
     function cmp
     (
         version1 in varchar2,
-        oper     in varchar2,
+        operator in varchar2,
         version2 in varchar2
     ) return boolean is
         l_version1 semver_version := parse(version1);
         l_version2 semver_version := parse(version2);
     begin
-        return semver_version_impl.cmp(l_version1, oper, l_version2);
+        return semver_version_impl.cmp(l_version1, operator, l_version2);
     end;
 
     ----------------------------------------------------------------------------
     function inc
     (
-        value      in varchar2,
-        release    in varchar2,
+        version    in varchar2,
+        release    in release_type,
         identifier in varchar2 default null
     ) return varchar2 is
         l_semver semver_version;
     begin
-        l_semver := new semver_version(value);
+        l_semver := new semver_version(version);
         if l_semver is not null then
             l_semver.inc(release, identifier);
             return l_semver.to_string();
@@ -337,15 +349,15 @@ create or replace package body semver as
     end;
 
     ----------------------------------------------------------------------------
-    function valid(value in varchar2) return varchar2 is
+    function valid(version in varchar2) return varchar2 is
     begin
-        return semver_version_impl.valid(value);
+        return semver_version_impl.valid(version);
     end;
 
     ----------------------------------------------------------------------------
-    function clean(value in varchar2) return varchar2 is
+    function clean(version in varchar2) return varchar2 is
     begin
-        return semver_version_impl.clean(value);
+        return semver_version_impl.clean(version);
     end;
 
     ----------------------------------------------------------------------------  
@@ -374,10 +386,10 @@ create or replace package body semver as
     end;
 
     ----------------------------------------------------------------------------
-    function parse_range(value in varchar2) return semver_range is
+    function parse_range(range in varchar2) return semver_range is
         l_range semver_range;
     begin
-        l_range := semver_range_impl.parse(value);
+        l_range := semver_range_impl.parse(range);
         if l_range is null then
             return null;
         else
@@ -389,10 +401,10 @@ create or replace package body semver as
     end;
 
     ----------------------------------------------------------------------------
-    function valid_range(value in varchar2) return varchar2 is
+    function valid_range(range in varchar2) return varchar2 is
         l_range semver_range;
     begin
-        l_range := parse_range(value);
+        l_range := parse_range(range);
         if l_range is not null then
             return l_range.to_string();
         else
