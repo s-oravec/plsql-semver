@@ -43,7 +43,7 @@ SemVer Version build tags
 
 /**
 
-Constructor function create SemVer Version object if passed versions make up valid SemVer range object. Otherwise exception is thrown.
+Create SemVer Version object if passed versions make up valid SemVer range object. Otherwise exception is thrown.
 
 %param major major version
 %param minor minor version
@@ -64,7 +64,7 @@ Constructor function create SemVer Version object if passed versions make up val
 
 /**
 
-Constructor function create SemVer Version object from SemVer Version string. If string is invalid it throws exception.
+Create SemVer Version object from SemVer Version string. If string is invalid it throws exception.
 
 %param version SemVer Version string to be parsed
 %return SemVer Version object
@@ -74,25 +74,23 @@ Constructor function create SemVer Version object from SemVer Version string. If
 
 /**
 
-Return formatted SemVer object as string
+Return formatted SemVer object as string.
 
 */
     member function to_string return varchar2,
 
 /**
 
-Compares SemVer version with version
-%return comparison result- see semver.compare_result_type
+Compare SemVer version with version passed in parameter.
+
+%param version version to be incremented
+%return comparison result - see semver.compare_result_type
   - -1 - less than
   -  0 - equal
   -  1 - grater than
 
 */
     order member function compare(version in semver_version) return pls_integer,
-
-    member function compareMain(version in semver_version) return pls_integer,
-
-    member function comparePrerelease(version in semver_version) return pls_integer,
 
 /**
 

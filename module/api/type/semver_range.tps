@@ -18,11 +18,11 @@ collection of SemVer Comparator sets
 Creates instance of SemVer Range by parsing string passed as param
 If parse fails then raises exception
 
-%param value SemVer Range  string
+%param range SemVer Range  string
 %return semver_range object
 
 */
-    constructor function semver_range(value in varchar2) return self as result,
+    constructor function semver_range(range in varchar2) return self as result,
 
 /**
 
@@ -35,7 +35,7 @@ Returns formatted object as string
 
 /**
     
-Version satisfies at least one set fo Comparators in Rage 
+Version satisfies at least one set of Comparators in Rage
 
 %param version SemVer Version object
 %return result of comparison

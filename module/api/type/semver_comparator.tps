@@ -14,7 +14,7 @@ SemVer Comparator
 
 /**
 
-Return Comparator formatted as string
+Return Comparator formatted as string.
 
 %return Comparator formatted as string
 
@@ -23,7 +23,7 @@ Return Comparator formatted as string
 
 /**
 
-Version satisfies comparision with Comparator version and operator
+Version satisfies comparision with Comparator version and operator.
 
 %param version SemVer Version object
 %return result of comparison version self.operator self.version. e.g.: version < 1.2.0
@@ -33,7 +33,7 @@ Version satisfies comparision with Comparator version and operator
 
 /**
         
-Comparator intersects Comparator passed as parameter
+Comparator intersects Comparator passed as parameter.
         
 %param comparatator Comparator object
 %return boolean result
@@ -43,7 +43,7 @@ Comparator intersects Comparator passed as parameter
 
 /**
 
-Compare with Comparator object passed as param
+Compare with Comparator object passed as param.
 
 %param comparator Comparator object
 %return comparison result -1 - less than, 0 - equal, 1 - greater than see semver.compare_result_type

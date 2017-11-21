@@ -1,10 +1,10 @@
 create or replace type body semver_range as
 
     ----------------------------------------------------------------------------  
-    constructor function semver_range(value in varchar2) return self as result is
+    constructor function semver_range(range in varchar2) return self as result is
         l_parsed_semver_range semver_range;
     begin
-        l_parsed_semver_range := semver_range_impl.parse(value);
+        l_parsed_semver_range := semver_range_impl.parse(range);
         self.comparator_sets  := l_parsed_semver_range.comparator_sets;
         return;
     end;

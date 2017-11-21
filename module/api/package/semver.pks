@@ -286,8 +286,7 @@ create or replace package semver as
 
     /**
       
-      Return the version incremented by the version component or null if it's not valid
-    
+      Return the version incremented by the release type or null if it's not valid
     
       * `premajor` in one call will bump the version up to the next major
       version and down to a prerelease of that major version.

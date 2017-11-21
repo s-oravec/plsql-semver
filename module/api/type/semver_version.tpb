@@ -24,6 +24,7 @@ create or replace type body semver_version as
         self.major      := major;
         self.minor      := minor;
         self.patch      := patch;
+        -- TODO: validate that prerelease/build tags are valid prerelease/build identifiers
         self.prerelease := prerelease;
         self.build      := build;
         --
@@ -77,7 +78,7 @@ create or replace type body semver_version as
     end;
 
     ----------------------------------------------------------------------------
-    member function compareMain(version in semver_version) return pls_integer is
+    /*member function compareMain(version in semver_version) return pls_integer is
     begin
         return semver_version_impl.compareMain(self, version);
     end;
@@ -86,7 +87,7 @@ create or replace type body semver_version as
     member function comparePrerelease(version in semver_version) return pls_integer is
     begin
         return semver_version_impl.compareMain(self, version);
-    end;
+    end;*/
 
     ----------------------------------------------------------------------------
     /*member function gt(version in semver_version) return boolean is
